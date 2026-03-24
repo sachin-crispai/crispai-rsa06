@@ -10,3 +10,4 @@ docs/field-notes/photos/
 *.CR2
 *.cr2
 .idea/
+.env

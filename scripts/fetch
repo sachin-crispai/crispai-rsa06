@@ -1,0 +1,606 @@
+#!/usr/bin/env python3
+"""
+Fetch — CrispAI RSA 2026 Web Enrichment Agent
+Queries live web data for RSA 2026 vendor/booth info. Saves to docs/enriched/
+for Scout to pick up offline.
+
+Sources (--source flag):
+    tavily      Tavily Search API → snippets synthesized by local Ollama  [cheapest]
+    gemini      Gemini 2.0 Flash + Google Search grounding                [good quality]
+    perplexity  Perplexity sonar-pro (search + LLM bundled)               [easiest setup]
+
+Usage:
+    ./scripts/fetch --exhibitors                            # full RSA 2026 exhibitor list
+    ./scripts/fetch --vendor "Wiz,CrowdStrike,SentinelOne"  # specific vendors
+    ./scripts/fetch --cluster 03-cloud-security             # one cluster
+    ./scripts/fetch --all-clusters                          # all 24 clusters
+    ./scripts/fetch --query "CNAPP vendors RSA 2026 booths" # free-form
+
+Setup (.env or env vars):
+    TAVILY_API_KEY=tvly-...          # https://tavily.com
+    GEMINI_API_KEY=AIza...           # https://aistudio.google.com
+    PERPLEXITY_API_KEY=pplx-...      # https://www.perplexity.ai/api
+"""
+
+import argparse
+import json
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+import urllib.request
+import urllib.error
+
+REPO_ROOT = Path(__file__).parent.parent
+DOCS_DIR  = REPO_ROOT / "docs"
+ENRICHED_DIR  = DOCS_DIR / "enriched"
+CLUSTERS_DIR  = DOCS_DIR / "clusters"
+
+RSA_EVENT = "RSA Conference 2026, March 23-26, Moscone Center, San Francisco"
+
+ANALYST_SYSTEM = (
+    f"You are a cybersecurity analyst attending {RSA_EVENT}. "
+    "Provide factual, structured markdown. Focus on booth numbers, halls, "
+    "new product announcements, and key differentiators at RSA 2026. "
+    "Be concise. Use tables where appropriate."
+)
+
+# ── Env / .env loader ─────────────────────────────────────────────────────────
+
+def _load_env() -> dict:
+    env: dict = {}
+    env_file = REPO_ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+_ENV = _load_env()
+
+def _key(name: str, override: str = None) -> str:
+    return override or os.environ.get(name, "") or _ENV.get(name, "")
+
+
+# ── Perplexity backend ────────────────────────────────────────────────────────
+
+def _perplexity(query: str, api_key: str, model: str = "sonar-pro") -> dict:
+    """Returns {answer, citations}."""
+    payload = json.dumps({
+        "model": model,
+        "messages": [
+            {"role": "system", "content": ANALYST_SYSTEM},
+            {"role": "user",   "content": query},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 2048,
+        "return_citations": True,
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.perplexity.ai/chat/completions",
+        data=payload,
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {api_key}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as r:
+        data = json.loads(r.read())
+    return {
+        "answer": data["choices"][0]["message"]["content"],
+        "citations": data.get("citations", []),
+    }
+
+
+# ── Gemini backend ────────────────────────────────────────────────────────────
+
+def _gemini(query: str, api_key: str, model: str = "gemini-2.5-flash") -> dict:
+    """Gemini with Google Search grounding. Returns {answer, citations, usage}."""
+    full_query = f"{ANALYST_SYSTEM}\n\n{query}"
+    payload = json.dumps({
+        "contents": [{"role": "user", "parts": [{"text": full_query}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048},
+    }).encode()
+
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model}:generateContent?key={api_key}"
+    )
+    req = urllib.request.Request(
+        url, data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as r:
+        data = json.loads(r.read())
+
+    answer = data["candidates"][0]["content"]["parts"][0]["text"]
+
+    citations = []
+    grounding = data["candidates"][0].get("groundingMetadata", {})
+    for chunk in grounding.get("groundingChunks", []):
+        uri = chunk.get("web", {}).get("uri", "")
+        if uri:
+            citations.append(uri)
+
+    usage = data.get("usageMetadata", {})
+    return {
+        "answer": answer,
+        "citations": citations,
+        "usage": {
+            "input_tokens":  usage.get("promptTokenCount", 0),
+            "output_tokens": usage.get("candidatesTokenCount", 0),
+        },
+    }
+
+
+# ── Tavily backend ────────────────────────────────────────────────────────────
+
+def _tavily_search(query: str, api_key: str, depth: str = "advanced") -> list[dict]:
+    """Returns list of {title, url, content} search results."""
+    payload = json.dumps({
+        "api_key": api_key,
+        "query": query,
+        "search_depth": depth,
+        "max_results": 8,
+        "include_answer": False,
+    }).encode()
+
+    req = urllib.request.Request(
+        "https://api.tavily.com/search",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.loads(r.read())
+    return data.get("results", [])
+
+
+def _ollama_synthesize(snippets_text: str, query: str,
+                        model: str = "qwen2.5:32b") -> str:
+    """Feed Tavily snippets to local Ollama for structured synthesis."""
+    prompt = (
+        f"{ANALYST_SYSTEM}\n\n"
+        f"Using the search snippets below, answer this query: {query}\n\n"
+        f"Format your answer as structured markdown with tables.\n\n"
+        f"SEARCH SNIPPETS:\n{snippets_text}\n\n"
+        f"Answer:"
+    )
+    payload = json.dumps({
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.2, "num_predict": 2048, "num_ctx": 16384},
+    }).encode()
+
+    req = urllib.request.Request(
+        "http://localhost:11434/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=300) as r:
+        data = json.loads(r.read())
+    return data.get("response", "").strip()
+
+
+def _tavily(query: str, api_key: str, ollama_model: str = "qwen2.5:32b") -> dict:
+    """Tavily search → local Ollama synthesis. Returns {answer, citations}."""
+    results = _tavily_search(query, api_key)
+    if not results:
+        return {"answer": "No results found.", "citations": []}
+
+    snippets = "\n\n".join(
+        f"[{r['title']}] ({r['url']})\n{r.get('content', '')[:600]}"
+        for r in results
+    )
+    citations = [r["url"] for r in results]
+    answer = _ollama_synthesize(snippets, query, ollama_model)
+    return {"answer": answer, "citations": citations}
+
+
+# ── Cost tracker ─────────────────────────────────────────────────────────────
+
+# Gemini 2.5 Flash pricing (per 1M tokens, ≤200K context window)
+GEMINI_PRICE_INPUT  = 0.075 / 1_000_000   # $0.075 / 1M input tokens
+GEMINI_PRICE_OUTPUT = 0.30  / 1_000_000   # $0.30  / 1M output tokens
+GEMINI_GROUNDING_FREE_TIER = 1500          # free grounding requests per day
+
+class CostTracker:
+    def __init__(self):
+        self.queries      = 0
+        self.input_tokens = 0
+        self.output_tokens= 0
+        self.grounding_reqs = 0
+
+    def add(self, usage: dict):
+        self.queries += 1
+        self.input_tokens  += usage.get("input_tokens", 0)
+        self.output_tokens += usage.get("output_tokens", 0)
+        self.grounding_reqs += 1
+
+    @property
+    def token_cost(self) -> float:
+        return (self.input_tokens  * GEMINI_PRICE_INPUT +
+                self.output_tokens * GEMINI_PRICE_OUTPUT)
+
+    @property
+    def grounding_cost(self) -> float:
+        billable = max(0, self.grounding_reqs - GEMINI_GROUNDING_FREE_TIER)
+        return billable * (35 / 1000)
+
+    @property
+    def total_cost(self) -> float:
+        return self.token_cost + self.grounding_cost
+
+    def summary(self) -> str:
+        lines = [
+            "─" * 52,
+            f"  Queries run       : {self.queries}",
+            f"  Input tokens      : {self.input_tokens:,}",
+            f"  Output tokens     : {self.output_tokens:,}",
+            f"  Token cost        : ${self.token_cost:.4f}",
+            f"  Grounding reqs    : {self.grounding_reqs}  "
+              f"(free tier: {GEMINI_GROUNDING_FREE_TIER}/day)",
+            f"  Grounding cost    : ${self.grounding_cost:.4f}",
+            f"  ── TOTAL COST ──  : ${self.total_cost:.4f}",
+            "─" * 52,
+        ]
+        return "\n".join(lines)
+
+    def save(self, path: Path):
+        path.write_text(
+            f"# Gemini Cost Log\n"
+            f"_Updated {datetime.now().strftime('%Y-%m-%d %H:%M')}_\n\n"
+            f"```\n{self.summary()}\n```\n"
+        )
+
+
+# ── Deep-crawl topic list ─────────────────────────────────────────────────────
+
+SPECIAL_TOPICS = [
+    ("rsa-2026-innovation-sandbox-finalists",
+     "RSA Conference 2026 Innovation Sandbox 10 finalists and winner. "
+     "List each company, what they do, booth/kiosk location, and why they won or were selected."),
+
+    ("rsa-2026-early-stage-expo",
+     "RSA Conference 2026 Early Stage Expo — list all companies exhibiting, "
+     "their kiosk numbers, product category, and one-line description."),
+
+    ("rsa-2026-keynotes-sessions-schedule",
+     "RSA Conference 2026 keynote speakers, session schedule, and must-attend sessions March 23-26. "
+     "Include speaker names, session titles, times, and rooms."),
+
+    ("rsa-2026-agentic-ai-security",
+     "RSA Conference 2026 agentic AI security — all vendors and products focused on "
+     "securing AI agents, agentic SOC, autonomous AI operations. Booth numbers, announcements, differentiators."),
+
+    ("rsa-2026-ai-spm-posture-management",
+     "RSA Conference 2026 AI Security Posture Management (AI-SPM) vendors. "
+     "Which vendors are launching AI-SPM or AI governance products? Booth numbers and key features."),
+
+    ("rsa-2026-new-startup-launches",
+     "RSA Conference 2026 new cybersecurity startup launches and first-time exhibitors. "
+     "Company name, product focus, funding stage, booth location."),
+
+    ("rsa-2026-crowdstrike",
+     "CrowdStrike at RSA Conference 2026: exact booth number, hall, all new product announcements, "
+     "demos, and key differentiators being highlighted on the show floor."),
+
+    ("rsa-2026-sentinelone",
+     "SentinelOne at RSA Conference 2026: exact booth number, hall, all new product announcements, "
+     "Purple AI updates, and key differentiators."),
+
+    ("rsa-2026-palo-alto-networks",
+     "Palo Alto Networks at RSA Conference 2026: exact booth number, hall, Cortex and Prisma updates, "
+     "new product announcements and demos."),
+
+    ("rsa-2026-microsoft-security",
+     "Microsoft Security at RSA Conference 2026: exact booth number, hall, Copilot for Security updates, "
+     "Defender and Sentinel announcements."),
+
+    ("rsa-2026-google-mandiant-wiz",
+     "Google / Mandiant / Wiz at RSA Conference 2026: booth numbers, halls, "
+     "Wiz AI Application Protection Platform details, Mandiant threat intel updates, Google Security AI announcements."),
+
+    ("rsa-2026-cisco-security",
+     "Cisco Security at RSA Conference 2026: exact booth number, hall, "
+     "Zero Trust for AI agents announcement, Hypershield updates, and all new products."),
+
+    ("rsa-2026-analyst-picks-best-demos",
+     "RSA Conference 2026 analyst picks, best booth demos, and must-see exhibitors. "
+     "What are security analysts and press recommending as the standout booths and demos?"),
+
+    ("rsa-2026-quantum-post-quantum-cryptography",
+     "RSA Conference 2026 quantum security and post-quantum cryptography vendors. "
+     "Which companies are presenting quantum-ready or PQC solutions? Booth numbers and product details."),
+]
+
+
+# ── Unified search dispatch ───────────────────────────────────────────────────
+
+def search(query: str, source: str, keys: dict, model: str) -> dict:
+    if source == "perplexity":
+        return _perplexity(query, keys["perplexity"], model or "sonar-pro")
+    elif source == "gemini":
+        return _gemini(query, keys["gemini"], model or "gemini-2.5-flash")
+    elif source == "tavily":
+        return _tavily(query, keys["tavily"], model or "qwen2.5:32b")
+    else:
+        raise ValueError(f"Unknown source: {source}")
+
+
+# ── Query builders ────────────────────────────────────────────────────────────
+
+def query_cluster(cluster_file: Path) -> tuple[str, list[str]]:
+    lines = cluster_file.read_text().splitlines()
+    title = lines[0].replace("# Cluster ", "").replace("# ", "") if lines else cluster_file.stem
+    vendors = []
+    for line in lines:
+        if line.startswith("| **") and line.count("|") >= 4:
+            cols = [c.strip().replace("**", "") for c in line.split("|") if c.strip()]
+            if cols:
+                vendors.append(cols[0])
+    if not vendors:
+        return "", []
+    vendor_list = ", ".join(vendors[:12])
+    q = (
+        f"For {RSA_EVENT}, provide booth information for these vendors "
+        f"in the '{title}' category: {vendor_list}. "
+        f"For each: booth number, hall, key RSA 2026 announcement, one-line differentiator. "
+        f"Format as a markdown table: Vendor | Booth | Hall | Key Announcement | Differentiator."
+    )
+    return q, vendors
+
+
+def query_vendors(vendors: list[str]) -> str:
+    return (
+        f"At {RSA_EVENT}, list the booth numbers, halls, and key RSA 2026 "
+        f"product announcements for: {', '.join(vendors)}. "
+        f"Format as a markdown table: Vendor | Booth | Hall | Announcement | Differentiator."
+    )
+
+
+def query_exhibitors() -> str:
+    return (
+        f"List all exhibitors at {RSA_EVENT}. "
+        f"Cover all halls: North, South, West, Early Stage Expo, Innovation Sandbox. "
+        f"Include vendor name, booth number, hall, and product category. "
+        f"Format as a markdown table: Vendor | Booth | Hall | Category."
+    )
+
+
+# ── Persist ───────────────────────────────────────────────────────────────────
+
+def save_enriched(topic: str, content: str, citations: list, source: str) -> Path:
+    ENRICHED_DIR.mkdir(parents=True, exist_ok=True)
+    slug = topic.lower().replace(" ", "-").replace("/", "-").replace(":", "")[:60]
+    out = ENRICHED_DIR / f"{slug}.md"
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    cite_block = ""
+    if citations:
+        cite_block = "\n\n## Sources\n" + "\n".join(f"- {c}" for c in citations[:8])
+
+    out.write_text(
+        f"# Enriched: {topic}\n"
+        f"_Fetched {timestamp} via {source}_\n\n"
+        + content
+        + cite_block
+        + "\n"
+    )
+    return out
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Fetch — RSA 2026 web enrichment (Tavily / Gemini / Perplexity)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+sources:
+  tavily      Tavily search → local Ollama synthesis  [cheapest: ~$0.01/query]
+  gemini      Gemini 2.0 Flash + Google Search        [~$0.035/query]
+  perplexity  Perplexity sonar-pro (bundled)          [~$0.005/query + tokens]
+
+examples:
+  ./scripts/fetch --exhibitors --source tavily
+  ./scripts/fetch --vendor "Wiz,Orca,Lacework" --source gemini
+  ./scripts/fetch --cluster 22-ai-ml-security --source perplexity
+  ./scripts/fetch --all-clusters --source tavily
+  ./scripts/fetch --query "CNAPP vendors RSA 2026 booth numbers"
+        """,
+    )
+    parser.add_argument("--source", "-s",
+                        choices=["tavily", "gemini", "perplexity"],
+                        default=None,
+                        help="Search backend (auto-detected from available API keys if omitted)")
+    parser.add_argument("--exhibitors", action="store_true",
+                        help="Fetch full RSA 2026 exhibitor list")
+    parser.add_argument("--vendor", "-v", metavar="VENDOR[,VENDOR...]",
+                        help="Enrich specific vendors (comma-separated)")
+    parser.add_argument("--cluster", "-c", metavar="SLUG",
+                        help="Enrich a cluster (e.g. 04-endpoint-edr-xdr)")
+    parser.add_argument("--all-clusters", action="store_true",
+                        help="Enrich all 24 clusters")
+    parser.add_argument("--deep-crawl", action="store_true",
+                        help="Run full RSA 2026 deep crawl: all 24 clusters + 14 special topics")
+    parser.add_argument("--query", "-q", metavar="TEXT",
+                        help="Free-form search query")
+    parser.add_argument("--model", metavar="MODEL",
+                        help="Override model (sonar-pro / gemini-2.5-flash / qwen2.5:32b)")
+    parser.add_argument("--depth", choices=["basic", "advanced"], default="advanced",
+                        help="Tavily search depth (default: advanced)")
+    args = parser.parse_args()
+
+    if not any([args.exhibitors, args.vendor, args.cluster, args.all_clusters,
+                args.deep_crawl, args.query]):
+        parser.print_help()
+        sys.exit(0)
+
+    # ── resolve API keys ───────────────────────────────────────────────────────
+    keys = {
+        "tavily":      _key("TAVILY_API_KEY"),
+        "gemini":      _key("GEMINI_API_KEY") or _key("GOOGLE_API_KEY"),
+        "perplexity":  _key("PERPLEXITY_API_KEY"),
+    }
+
+    # auto-detect source from available keys (preference: tavily > perplexity > gemini)
+    source = args.source
+    if not source:
+        for candidate in ("tavily", "perplexity", "gemini"):
+            if keys[candidate]:
+                source = candidate
+                break
+
+    if not source:
+        print("✗  No API key found for any search backend.", file=sys.stderr)
+        print("   Add one of these to .env:", file=sys.stderr)
+        print("     TAVILY_API_KEY=tvly-...", file=sys.stderr)
+        print("     PERPLEXITY_API_KEY=pplx-...", file=sys.stderr)
+        print("     GEMINI_API_KEY=AIza...", file=sys.stderr)
+        sys.exit(1)
+
+    if not keys[source]:
+        print(f"✗  No API key for --source {source}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Source: {source}  |  ", end="")
+    if source == "tavily":
+        print(f"synthesis: local Ollama ({args.model or 'qwen2.5:32b'})")
+    elif source == "gemini":
+        print(f"model: {args.model or 'gemini-2.5-flash'} + Google Search grounding")
+    else:
+        print(f"model: {args.model or 'sonar-pro'}")
+
+    cost = CostTracker()
+    cost_log = ENRICHED_DIR / "cost-log.md"
+    ENRICHED_DIR.mkdir(parents=True, exist_ok=True)
+
+    def run(topic: str, query: str) -> str:
+        result = search(query, source, keys, args.model)
+        path = save_enriched(topic, result["answer"], result["citations"], source)
+        if source == "gemini":
+            cost.add(result.get("usage", {}))
+            in_tok  = result.get("usage", {}).get("input_tokens", 0)
+            out_tok = result.get("usage", {}).get("output_tokens", 0)
+            q_cost  = (in_tok * GEMINI_PRICE_INPUT + out_tok * GEMINI_PRICE_OUTPUT)
+            print(f"  ✓  {path.name}  [{in_tok}in/{out_tok}out tok · ${q_cost:.4f}]")
+            cost.save(cost_log)
+        else:
+            print(f"  ✓  {path.relative_to(REPO_ROOT)}")
+        return result["answer"]
+
+    try:
+        if args.deep_crawl:
+            cluster_files = sorted(CLUSTERS_DIR.glob("*.md"))
+            total = len(cluster_files) + len(SPECIAL_TOPICS)
+            print(f"\nDeep crawl: {len(cluster_files)} clusters + {len(SPECIAL_TOPICS)} special topics = {total} queries\n")
+
+            # Batch 1: all clusters
+            print("── Batch 1: Technology Clusters ──────────────────────")
+            ok = fail = 0
+            for i, cf in enumerate(cluster_files, 1):
+                print(f"[{i:2}/{len(cluster_files)}] {cf.stem}", end="  ", flush=True)
+                try:
+                    q, _ = query_cluster(cf)
+                    if q:
+                        run(cf.stem, q)
+                        ok += 1
+                    else:
+                        print("(skipped — no vendors)")
+                except Exception as e:
+                    print(f"✗  {e}")
+                    fail += 1
+            print(f"\nClusters done: {ok} ok, {fail} failed")
+
+            # Batch 2: special topics
+            print("\n── Batch 2: Special Topics ───────────────────────────")
+            ok2 = fail2 = 0
+            for i, (slug, query) in enumerate(SPECIAL_TOPICS, 1):
+                print(f"[{i:2}/{len(SPECIAL_TOPICS)}] {slug}", end="  ", flush=True)
+                try:
+                    run(slug, query)
+                    ok2 += 1
+                except Exception as e:
+                    print(f"✗  {e}")
+                    fail2 += 1
+
+            print(f"\nSpecial topics done: {ok2} ok, {fail2} failed")
+            print(f"\n── Cost Summary ──────────────────────────────────────")
+            print(cost.summary())
+            print(f"\nCost log → {cost_log.relative_to(REPO_ROOT)}")
+            sys.exit(0)
+
+        if args.query:
+            print(f"\nQuery: {args.query}")
+            answer = run(args.query[:50], args.query)
+            print("\n" + answer[:800] + ("…" if len(answer) > 800 else ""))
+
+        if args.vendor:
+            vendors = [v.strip() for v in args.vendor.split(",") if v.strip()]
+            print(f"\nVendors: {', '.join(vendors)}")
+            answer = run(
+                "vendors-" + "-".join(v.lower().replace(" ", "")[:8] for v in vendors[:3]),
+                query_vendors(vendors),
+            )
+            print("\n" + answer[:800] + ("…" if len(answer) > 800 else ""))
+
+        if args.cluster:
+            matches = sorted(CLUSTERS_DIR.glob(f"*{args.cluster}*.md"))
+            if not matches:
+                print(f"✗  No cluster matching: {args.cluster}", file=sys.stderr)
+                print(f"   Available: {', '.join(f.stem for f in sorted(CLUSTERS_DIR.glob('*.md')))}")
+                sys.exit(1)
+            for cf in matches:
+                print(f"\nCluster: {cf.stem}")
+                q, _ = query_cluster(cf)
+                if q:
+                    run(cf.stem, q)
+                else:
+                    print("  (no vendors found)")
+
+        if args.all_clusters:
+            cluster_files = sorted(CLUSTERS_DIR.glob("*.md"))
+            print(f"\nEnriching {len(cluster_files)} clusters…\n")
+            ok = fail = 0
+            for i, cf in enumerate(cluster_files, 1):
+                print(f"[{i:2}/{len(cluster_files)}] {cf.stem}", end="  ", flush=True)
+                try:
+                    q, _ = query_cluster(cf)
+                    if q:
+                        run(cf.stem, q)
+                        ok += 1
+                    else:
+                        print("(skipped)")
+                except Exception as e:
+                    print(f"✗  {e}")
+                    fail += 1
+            print(f"\nDone: {ok} enriched, {fail} failed")
+            if source == "gemini":
+                print(cost.summary())
+
+        if args.exhibitors:
+            print("\nFetching full exhibitor list…")
+            answer = run("rsa-2026-exhibitors", query_exhibitors())
+            print("\n" + answer[:1000] + ("…" if len(answer) > 1000 else ""))
+
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        print(f"\n✗  HTTP {e.code}: {body[:400]}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as e:
+        print(f"\n✗  Network error: {e.reason}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nAborted.")
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

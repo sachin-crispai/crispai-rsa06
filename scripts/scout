@@ -68,6 +68,18 @@ def load_redbook_context() -> str:
         if vendor_lines:
             parts.append("VENDORS (cluster|name|booth):\n" + "\n".join(vendor_lines))
 
+    # Enriched web data from ./scripts/fetch (Perplexity-sourced, live RSA data)
+    enriched_dir = DOCS_DIR / "enriched"
+    if enriched_dir.exists():
+        enriched_parts = []
+        for f in sorted(enriched_dir.glob("*.md")):
+            # Cap each file at 80 lines to stay within context budget
+            lines = f.read_text().splitlines()[:80]
+            enriched_parts.append("\n".join(lines))
+        if enriched_parts:
+            parts.append("ENRICHED WEB DATA (live RSA 2026, sourced via Perplexity):\n"
+                         + "\n---\n".join(enriched_parts))
+
     return "\n\n".join(parts)
 
 
@@ -170,8 +182,7 @@ def main():
     if args.chat or not args.question:
         chat_mode(context)
     else:
-        answer = ask_ollama(args.question, context)
-        print(answer)
+        ask_ollama(args.question, context)
 
 
 if __name__ == "__main__":
