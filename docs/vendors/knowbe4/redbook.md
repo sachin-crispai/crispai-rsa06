@@ -1,5 +1,5 @@
 <!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: KnowBe4 is confirmed to be attending RSA Conference 2026. Specific booth number, hall, and sponsor tier were not found in publicly accessible search results, likely requiring access to an official exhibitor directory or interactive map. The recorded category 'Security Awareness & Training' is accurate and expanded to 'Human Risk Management & Security Awareness Training' based on product descriptions. -->
+<!-- Validation note: KnowBe4 is at booth 1343 at RSA Conference 2026. Also absorbed Egress (email security, acquired July 2024) — Egress features are now part of KnowBe4's platform. -->
 
 # KnowBe4 — Field Card
 
@@ -8,11 +8,11 @@
 ## Location
 | Field | Details |
 |-------|---------|
-| **Booth** | Not Found |
-| **Hall** | Not Found |
+| **Booth** | 1343 |
+| **Hall** | TBD |
 | **Sponsor Tier** | ❓ Unknown |
 | **Attendance** | ✅ Confirmed |
-| **Navigate** | Not Found |
+| **Navigate** | — |
 
 ---
 

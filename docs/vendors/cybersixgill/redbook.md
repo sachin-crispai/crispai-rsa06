@@ -1,5 +1,5 @@
 <!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: Cybersixgill was not found on the RSA Conference 2026 exhibitor list or related announcements, indicating they are not attending. -->
+<!-- Validation note: Cybersixgill was acquired by Bitsight in November 2024. Bitsight is confirmed attending RSA 2026 (booth TBD — "stay tuned" per their events page). Dark web intelligence capabilities now part of Bitsight platform. -->
 
 # Cybersixgill — Field Card
 

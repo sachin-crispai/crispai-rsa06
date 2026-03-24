@@ -1,5 +1,5 @@
 <!-- Auto-generated 2026-03-24 16:24 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: No exhibitor information, booth number, or sponsor tier found for Noname Security at RSA Conference 2026, suggesting they are not attending as an exhibitor. -->
+<!-- Validation note: Noname Security was acquired by Akamai in Q2 2024 for ~$450M. Akamai is confirmed at booth N-6245 (North Hall, Gold Sponsor). API security capabilities now part of Akamai's portfolio. -->
 
 # Noname Security — Field Card
 

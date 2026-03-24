@@ -1,5 +1,5 @@
 <!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: Agari (HelpSystems) was not found on the RSA Conference 2026 exhibitor list or in any related announcements, indicating they are not attending. -->
+<!-- Validation note: Agari/HelpSystems rebranded to Fortra. Fortra is confirmed attending RSA 2026 at booth S-1043. Brand "Agari" no longer exhibiting independently. -->
 
 # Agari (HelpSystems) — Field Card
 

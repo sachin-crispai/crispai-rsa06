@@ -1,5 +1,5 @@
 <!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: Egress was not found on the publicly available exhibitor lists for RSA Conference 2026. Therefore, their attendance as an exhibitor is unconfirmed. -->
+<!-- Validation note: Egress was acquired by KnowBe4 in July 2024 and is not exhibiting independently at RSA 2026. KnowBe4 (absorbing Egress email security) is at booth 1343. See docs/vendors/knowbe4/redbook.md. -->
 
 # Egress — Field Card
 

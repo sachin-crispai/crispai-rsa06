@@ -1,5 +1,5 @@
 <!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: Secureworks was not found on the official RSA Conference 2026 exhibitor or sponsor lists based on live web search results. -->
+<!-- Validation note: Secureworks was acquired by Sophos in February 2025 and now operates under the Sophos umbrella. Sophos is exhibiting at RSA 2026, booth #6477. Visit Sophos booth to find Secureworks/Taegis portfolio. -->
 
 # Secureworks — Field Card
 

@@ -1,5 +1,5 @@
 <!-- Auto-generated 2026-03-24 16:24 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: Official RSA Conference 2026 exhibitor directory could not be found via live web search to confirm StackRox (Red Hat) or Red Hat Advanced Cluster Security for Kubernetes' presence, booth, hall, or sponsor tier. Information regarding their attendance is based on the absence from publicly accessible exhibitor lists. -->
+<!-- Validation note: StackRox product is now Red Hat Advanced Cluster Security (ACS). Red Hat and IBM Security are confirmed attending RSA 2026 (booth TBD). Visit IBM Security / Red Hat presence for container/Kubernetes security discussions. -->
 
 # StackRox (Red Hat) — Field Card
 
