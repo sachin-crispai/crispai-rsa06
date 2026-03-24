@@ -1,0 +1,165 @@
+#!/usr/bin/env python3
+"""
+CrispAI RSA 2026 — Offline Redbook Assistant
+Ask questions about RSA vendors, clusters, and floor plan — no internet needed.
+Powered by local Ollama (qwen2.5:7b) with redbook context injected.
+
+Usage:
+    ./scripts/crisp-rsa "Which booths are in the North Hall?"
+    ./scripts/crisp-rsa "Compare CrowdStrike and SentinelOne"
+    ./scripts/crisp-rsa "What should I ask at the Wiz booth?"
+    ./scripts/crisp-rsa --chat    # interactive chat mode
+"""
+
+import argparse
+import json
+import sys
+import os
+from pathlib import Path
+
+import urllib.request
+import urllib.error
+
+REPO_ROOT = Path(__file__).parent.parent
+DOCS_DIR = REPO_ROOT / "docs"
+OLLAMA_URL = "http://localhost:11434/api/generate"
+TEXT_MODEL = "qwen2.5:7b"
+
+SYSTEM_PROMPT = """You are CrispAI's RSA Conference 2026 field assistant. You have deep knowledge of:
+- RSA Conference 2026 (March 23-26, Moscone Center, San Francisco)
+- All 24 vendor technology clusters and their key players
+- Booth locations (North Hall N- prefix, South Hall S- prefix, ESE- for Early Stage)
+- Security technology categories: IAM, Zero Trust, SIEM, EDR/XDR, CNAPP, SOAR, threat intel, etc.
+- Key questions to ask vendors at each booth
+
+You are running offline on a local LLM during the conference. Be concise, practical, and actionable.
+Focus on helping the user navigate the conference floor, compare vendors, and capture useful notes.
+When listing vendors, always include booth numbers if known."""
+
+
+def load_redbook_context() -> str:
+    """Load key redbook documents as context."""
+    context_parts = []
+
+    # Main redbook
+    redbook = DOCS_DIR / "redbook" / "rsa_redbook.md"
+    if redbook.exists():
+        content = redbook.read_text()
+        # Truncate to keep context manageable — take key sections
+        context_parts.append(f"=== RSA REDBOOK ===\n{content[:6000]}")
+
+    # Load all cluster docs (summarized)
+    clusters_dir = DOCS_DIR / "clusters"
+    if clusters_dir.exists():
+        cluster_summaries = []
+        for f in sorted(clusters_dir.glob("*.md")):
+            text = f.read_text()
+            # Take first 800 chars of each cluster doc (vendor table + description)
+            cluster_summaries.append(f"--- {f.stem} ---\n{text[:800]}")
+        if cluster_summaries:
+            context_parts.append("=== VENDOR CLUSTERS ===\n" + "\n\n".join(cluster_summaries[:12]))
+            context_parts.append("=== VENDOR CLUSTERS (continued) ===\n" + "\n\n".join(cluster_summaries[12:]))
+
+    return "\n\n".join(context_parts)
+
+
+def ask_ollama(question: str, context: str, history: list = None) -> str:
+    """Send question to Ollama with redbook context."""
+    history = history or []
+
+    # Build conversation with context injected at start
+    full_prompt = f"{SYSTEM_PROMPT}\n\nKNOWLEDGE BASE:\n{context}\n\n"
+
+    # Add conversation history
+    for turn in history[-6:]:  # Keep last 3 exchanges
+        full_prompt += f"User: {turn['user']}\nAssistant: {turn['assistant']}\n\n"
+
+    full_prompt += f"User: {question}\nAssistant:"
+
+    payload = json.dumps({
+        "model": TEXT_MODEL,
+        "prompt": full_prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.3,
+            "num_predict": 1024,
+            "num_ctx": 8192,
+        }
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        OLLAMA_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST"
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            return result.get("response", "No response received.").strip()
+    except urllib.error.URLError:
+        return "✗ Cannot reach Ollama. Try: brew services start ollama"
+
+
+def chat_mode(context: str):
+    """Interactive multi-turn chat mode."""
+    print("\nCrispAI RSA Assistant — Chat Mode")
+    print("Type 'exit' or Ctrl+C to quit\n")
+    print("─" * 50)
+
+    history = []
+    while True:
+        try:
+            question = input("\nYou: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nGoodbye!")
+            break
+
+        if not question:
+            continue
+        if question.lower() in {"exit", "quit", "bye"}:
+            print("Goodbye!")
+            break
+
+        print("\nAssistant: ", end="", flush=True)
+        answer = ask_ollama(question, context, history)
+        print(answer)
+
+        history.append({"user": question, "assistant": answer})
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="CrispAI RSA 2026 offline assistant"
+    )
+    parser.add_argument("question", nargs="?",
+                        help="Question to ask (omit for --chat mode)")
+    parser.add_argument("--chat", "-c", action="store_true",
+                        help="Interactive chat mode")
+    parser.add_argument("--model", default=TEXT_MODEL,
+                        help=f"Ollama text model (default: {TEXT_MODEL})")
+    args = parser.parse_args()
+
+    if not args.question and not args.chat:
+        parser.print_help()
+        print("\nExamples:")
+        print('  ./scripts/crisp-rsa "Which booths are in the North Hall?"')
+        print('  ./scripts/crisp-rsa "What should I ask at the Wiz booth?"')
+        print('  ./scripts/crisp-rsa "Compare CrowdStrike and SentinelOne"')
+        print('  ./scripts/crisp-rsa --chat')
+        sys.exit(0)
+
+    print("Loading redbook context...", end=" ", flush=True)
+    context = load_redbook_context()
+    print("ready\n")
+
+    if args.chat or not args.question:
+        chat_mode(context)
+    else:
+        answer = ask_ollama(args.question, context)
+        print(answer)
+
+
+if __name__ == "__main__":
+    main()
