@@ -55,7 +55,9 @@ ollama_running() {
 }
 
 model_available() {
-  ollama list 2>/dev/null | grep -q "^$1"
+  local list
+  list=$(ollama list 2>/dev/null)
+  echo "$list" | grep -q "^$1"
 }
 
 # ── Step 1: Start Ollama ──────────────────────────────────────────────────────
@@ -97,7 +99,7 @@ for model in "${MODELS[@]}"; do
     echo "  ⚠  ${model} is NOT pulled locally."
     echo "     Pull it now? This requires internet access."
     read -r -p "     Pull ${model}? [y/N] " yn
-    if [[ "${yn,,}" == "y" ]]; then
+    if [[ "$yn" == "y" || "$yn" == "Y" ]]; then
       ollama pull "$model"
       ok "${model} pulled"
     else
@@ -130,9 +132,10 @@ case "${UI}" in
     echo "  Press Ctrl+C to stop."
     echo
     # Point Open WebUI at local Ollama; disable auth for local offline use
+    # Open WebUI requires Python <=3.12 (torch has no cp313 wheels yet)
     OLLAMA_BASE_URL="http://localhost:${OLLAMA_PORT}" \
     WEBUI_AUTH=false \
-      uvx open-webui serve --port "${OPENWEBUI_PORT}"
+      uvx --python 3.12 open-webui serve --port "${OPENWEBUI_PORT}"
     ;;
 
   gradio)
