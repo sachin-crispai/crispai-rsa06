@@ -17,6 +17,9 @@ import json
 import os
 import re
 import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 import urllib.request
@@ -227,6 +230,31 @@ def save_research(vendor: str, content: str, citations: list, category: str, boo
     return out
 
 
+# ── Rate limiter (token bucket) ──────────────────────────────────────────────
+# Gemini free tier: 15 RPM hard limit. We use 12 to stay safely under.
+
+class RateLimiter:
+    """Token-bucket rate limiter — allows up to `rate` calls per 60s."""
+    def __init__(self, rate: int = 100):
+        self._rate      = rate
+        self._tokens    = rate
+        self._last      = time.monotonic()
+        self._lock      = threading.Lock()
+
+    def acquire(self):
+        while True:
+            with self._lock:
+                now     = time.monotonic()
+                elapsed = now - self._last
+                self._tokens = min(self._rate,
+                                   self._tokens + elapsed * (self._rate / 60.0))
+                self._last  = now
+                if self._tokens >= 1:
+                    self._tokens -= 1
+                    return
+            time.sleep(0.5)
+
+
 # ── Extract vendor list from cluster docs ────────────────────────────────────
 
 def load_all_vendors() -> list[tuple[str, str, str]]:
@@ -271,6 +299,8 @@ examples:
                         help="Research all vendors from cluster docs")
     parser.add_argument("--model", default="gemini-2.5-flash",
                         help="Gemini model (default: gemini-2.5-flash)")
+    parser.add_argument("--workers", "-w", type=int, default=25,
+                        help="Parallel workers (default: 25 for 100 RPM paid tier)")
     args = parser.parse_args()
 
     if not any([args.vendor, args.priority, args.all]):
@@ -283,57 +313,81 @@ examples:
     elif args.all:
         queue = [(name, cat, booth) for name, cat, booth in load_all_vendors()]
     else:
-        # parse --vendor list; try to find category/booth from cluster docs
         all_vendors = {v[0].lower(): v for v in load_all_vendors()}
         queue = []
         for name in [v.strip() for v in args.vendor.split(",") if v.strip()]:
             match = all_vendors.get(name.lower())
-            if match:
-                queue.append(match)
-            else:
-                queue.append((name, "Unknown", "?"))
+            queue.append(match if match else (name, "Unknown", "?"))
 
-    total    = len(queue)
-    total_in = total_out = 0
-    ok = fail = 0
-
-    print(f"Vendor research: {total} vendor(s) · model: {args.model}\n")
-
-    for i, (vendor, category, booth) in enumerate(queue, 1):
-        slug = slugify(vendor)
-        out_path = VENDORS_DIR / slug / "research.md"
-
-        # Skip if already researched today
+    # Filter already-cached vendors
+    pending, skipped = [], []
+    for item in queue:
+        vendor, _, _ = item
+        out_path = VENDORS_DIR / slugify(vendor) / "research.md"
         if out_path.exists():
-            age_hours = (datetime.now().timestamp() - out_path.stat().st_mtime) / 3600
-            if age_hours < 8:
-                print(f"[{i:3}/{total}] {vendor:35s}  (cached, {age_hours:.1f}h ago)")
-                ok += 1
+            age_h = (datetime.now().timestamp() - out_path.stat().st_mtime) / 3600
+            if age_h < 8:
+                skipped.append(vendor)
                 continue
+        pending.append(item)
 
-        print(f"[{i:3}/{total}] {vendor:35s}", end="  ", flush=True)
+    workers   = min(args.workers, 100)  # paid tier supports up to 1000 RPM
+    limiter   = RateLimiter(rate=12)
+    total     = len(queue)
+    print_lock = threading.Lock()
+
+    print(f"Vendor research: {total} total · {len(skipped)} cached · "
+          f"{len(pending)} to fetch · {workers} workers · model: {args.model}\n")
+    if skipped:
+        print(f"  Skipping (cached): {', '.join(skipped[:8])}"
+              + (" …" if len(skipped) > 8 else "") + "\n")
+
+    # Thread-safe counters
+    counters = {"ok": 0, "fail": 0, "in_tok": 0, "out_tok": 0}
+    c_lock   = threading.Lock()
+    done     = [0]
+
+    def process(item: tuple) -> None:
+        vendor, category, booth = item
+        limiter.acquire()                           # respect 15 RPM
         try:
             query  = build_query(vendor, category, booth)
             result = gemini(query, args.model)
             path   = save_research(vendor, result["answer"], result["citations"],
                                    category, booth)
             cost   = result["in_tok"] * PRICE_IN + result["out_tok"] * PRICE_OUT
-            total_in  += result["in_tok"]
-            total_out += result["out_tok"]
-            print(f"✓  {path.relative_to(REPO_ROOT)}  "
-                  f"[{result['in_tok']}in/{result['out_tok']}out · ${cost:.4f}]")
-            ok += 1
+            with c_lock:
+                counters["ok"]      += 1
+                counters["in_tok"]  += result["in_tok"]
+                counters["out_tok"] += result["out_tok"]
+                done[0]             += 1
+                n = done[0]
+            with print_lock:
+                print(f"  [{n:3}/{len(pending)}] {vendor:35s}  "
+                      f"✓ [{result['in_tok']}in/{result['out_tok']}out · ${cost:.4f}]")
         except Exception as e:
-            print(f"✗  {e}")
-            fail += 1
+            with c_lock:
+                counters["fail"] += 1
+                done[0]          += 1
+                n = done[0]
+            with print_lock:
+                print(f"  [{n:3}/{len(pending)}] {vendor:35s}  ✗ {e}")
 
-    # Summary
-    total_cost = total_in * PRICE_IN + total_out * PRICE_OUT
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(process, item): item for item in pending}
+        try:
+            for _ in as_completed(futures):
+                pass
+        except KeyboardInterrupt:
+            print("\nAborted — partial results saved.")
+
+    total_cost = counters["in_tok"] * PRICE_IN + counters["out_tok"] * PRICE_OUT
     print(f"""
 ────────────────────────────────────────
-  Vendors researched : {ok}  (failed: {fail})
-  Input tokens       : {total_in:,}
-  Output tokens      : {total_out:,}
+  Workers used       : {workers}
+  Vendors fetched    : {counters['ok']}  (failed: {counters['fail']}, cached: {len(skipped)})
+  Input tokens       : {counters['in_tok']:,}
+  Output tokens      : {counters['out_tok']:,}
   Token cost         : ${total_cost:.4f}
   Output directory   : docs/vendors/
 ────────────────────────────────────────""")
