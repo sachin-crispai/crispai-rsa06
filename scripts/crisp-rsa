@@ -2,7 +2,7 @@
 """
 CrispAI RSA 2026 — Offline Redbook Assistant
 Ask questions about RSA vendors, clusters, and floor plan — no internet needed.
-Powered by local Ollama (qwen2.5:7b) with redbook context injected.
+Powered by local Ollama (qwen2.5:32b) with compact redbook context.
 
 Usage:
     ./scripts/crisp-rsa "Which booths are in the North Hall?"
@@ -23,67 +23,71 @@ import urllib.error
 REPO_ROOT = Path(__file__).parent.parent
 DOCS_DIR = REPO_ROOT / "docs"
 OLLAMA_URL = "http://localhost:11434/api/generate"
-TEXT_MODEL = "qwen2.5:7b"
+TEXT_MODEL = "qwen2.5:32b"
 
-SYSTEM_PROMPT = """You are CrispAI's RSA Conference 2026 field assistant. You have deep knowledge of:
-- RSA Conference 2026 (March 23-26, Moscone Center, San Francisco)
-- All 24 vendor technology clusters and their key players
-- Booth locations (North Hall N- prefix, South Hall S- prefix, ESE- for Early Stage)
-- Security technology categories: IAM, Zero Trust, SIEM, EDR/XDR, CNAPP, SOAR, threat intel, etc.
-- Key questions to ask vendors at each booth
-
-You are running offline on a local LLM during the conference. Be concise, practical, and actionable.
-Focus on helping the user navigate the conference floor, compare vendors, and capture useful notes.
-When listing vendors, always include booth numbers if known."""
+SYSTEM_PROMPT = """You are CrispAI's RSA Conference 2026 field assistant.
+RULE: Answer ONLY using facts from the KNOWLEDGE BASE below. Do NOT invent vendor names, booth numbers, or data not present. If unknown, say so.
+Be concise and actionable. Always include real booth numbers when listing vendors."""
 
 
 def load_redbook_context() -> str:
-    """Load key redbook documents as context."""
-    context_parts = []
+    """Load compact context: booth table + vendor index. ~2K tokens."""
+    parts = []
 
-    # Main redbook
+    # Booth table from the redbook
     redbook = DOCS_DIR / "redbook" / "rsa_redbook.md"
     if redbook.exists():
-        content = redbook.read_text()
-        # Truncate to keep context manageable — take key sections
-        context_parts.append(f"=== RSA REDBOOK ===\n{content[:6000]}")
+        raw = redbook.read_text().splitlines()
+        booth_section, in_booth = [], False
+        for line in raw:
+            if "Known Booth Locations" in line or "Booth Numbering" in line:
+                in_booth = True
+            if in_booth:
+                booth_section.append(line)
+                if len(booth_section) > 45:
+                    break
+        parts.append(
+            "RSA 2026: March 23-26, Moscone Center, 747 Howard St SF\n"
+            + "\n".join(booth_section)
+        )
 
-    # Load all cluster docs (summarized)
+    # Compact vendor index: cluster|name|booth per line
     clusters_dir = DOCS_DIR / "clusters"
     if clusters_dir.exists():
-        cluster_summaries = []
+        vendor_lines = []
         for f in sorted(clusters_dir.glob("*.md")):
-            text = f.read_text()
-            # Take first 800 chars of each cluster doc (vendor table + description)
-            cluster_summaries.append(f"--- {f.stem} ---\n{text[:800]}")
-        if cluster_summaries:
-            context_parts.append("=== VENDOR CLUSTERS ===\n" + "\n\n".join(cluster_summaries[:12]))
-            context_parts.append("=== VENDOR CLUSTERS (continued) ===\n" + "\n\n".join(cluster_summaries[12:]))
+            lines = f.read_text().splitlines()
+            cluster = lines[0].replace("# Cluster ", "").replace("# ", "") if lines else f.stem
+            tag = cluster.split("—")[-1].strip().split("(")[0].strip()[:12]
+            for line in lines:
+                if line.startswith("| **") and line.count("|") >= 4:
+                    cols = [c.strip().replace("**", "") for c in line.split("|") if c.strip()]
+                    if len(cols) >= 3:
+                        booth = cols[2] if cols[2] not in ("—", "-", "") else "?"
+                        vendor_lines.append(f"{tag}|{cols[0]}|{booth}")
+        if vendor_lines:
+            parts.append("VENDORS (cluster|name|booth):\n" + "\n".join(vendor_lines))
 
-    return "\n\n".join(context_parts)
+    return "\n\n".join(parts)
 
 
 def ask_ollama(question: str, context: str, history: list = None) -> str:
-    """Send question to Ollama with redbook context."""
+    """Send question to Ollama with redbook context, streaming output."""
     history = history or []
 
-    # Build conversation with context injected at start
     full_prompt = f"{SYSTEM_PROMPT}\n\nKNOWLEDGE BASE:\n{context}\n\n"
-
-    # Add conversation history
-    for turn in history[-6:]:  # Keep last 3 exchanges
+    for turn in history[-6:]:
         full_prompt += f"User: {turn['user']}\nAssistant: {turn['assistant']}\n\n"
-
     full_prompt += f"User: {question}\nAssistant:"
 
     payload = json.dumps({
         "model": TEXT_MODEL,
         "prompt": full_prompt,
-        "stream": False,
+        "stream": True,
         "options": {
             "temperature": 0.3,
             "num_predict": 1024,
-            "num_ctx": 8192,
+            "num_ctx": 32768,
         }
     }).encode("utf-8")
 
@@ -95,11 +99,22 @@ def ask_ollama(question: str, context: str, history: list = None) -> str:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            return result.get("response", "No response received.").strip()
+        tokens = []
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            for line in resp:
+                line = line.strip()
+                if not line:
+                    continue
+                chunk = json.loads(line.decode("utf-8"))
+                token = chunk.get("response", "")
+                tokens.append(token)
+                print(token, end="", flush=True)
+                if chunk.get("done"):
+                    break
+        print()
+        return "".join(tokens).strip()
     except urllib.error.URLError:
-        return "✗ Cannot reach Ollama. Try: brew services start ollama"
+        return "✗ Cannot reach Ollama. Start it with:\n  OLLAMA_FLASH_ATTENTION=1 /opt/homebrew/opt/ollama/bin/ollama serve"
 
 
 def chat_mode(context: str):
@@ -124,8 +139,6 @@ def chat_mode(context: str):
 
         print("\nAssistant: ", end="", flush=True)
         answer = ask_ollama(question, context, history)
-        print(answer)
-
         history.append({"user": question, "assistant": answer})
 
 
@@ -152,7 +165,7 @@ def main():
 
     print("Loading redbook context...", end=" ", flush=True)
     context = load_redbook_context()
-    print("ready\n")
+    print("ready\n", flush=True)
 
     if args.chat or not args.question:
         chat_mode(context)

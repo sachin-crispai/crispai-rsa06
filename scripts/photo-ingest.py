@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CrispAI RSA 2026 — Booth Photo Analyzer
-Analyzes booth photos using local Ollama vision LLM (llama3.2-vision:11b)
+Analyzes booth photos using local Ollama vision LLM (qwen2.5vl:7b)
 and appends structured notes to docs/field-notes/photo-log.md
 
 Usage:
@@ -24,8 +24,8 @@ import urllib.error
 
 REPO_ROOT = Path(__file__).parent.parent
 PHOTO_LOG = REPO_ROOT / "docs" / "field-notes" / "photo-log.md"
-OLLAMA_URL = "http://localhost:11434/api/generate"
-VISION_MODEL = "llama3.2-vision:11b"
+OLLAMA_URL = "http://localhost:11434/api/chat"
+VISION_MODEL = "qwen2.5vl:7b"
 
 PROMPT = """You are analyzing a photo taken at RSA Conference 2026 at Moscone Center, San Francisco.
 
@@ -62,8 +62,7 @@ def analyze_photo(image_path: Path) -> dict:
 
     payload = json.dumps({
         "model": VISION_MODEL,
-        "prompt": PROMPT,
-        "images": [image_b64],
+        "messages": [{"role": "user", "content": PROMPT, "images": [image_b64]}],
         "stream": False,
         "options": {
             "temperature": 0.1,
@@ -81,7 +80,8 @@ def analyze_photo(image_path: Path) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-            raw_text = result.get("response", "").strip()
+            raw_text = result.get("message", {}).get("content",
+                        result.get("response", "")).strip()
 
             # Extract JSON from response (handle markdown code blocks)
             json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
@@ -97,7 +97,8 @@ def analyze_photo(image_path: Path) -> dict:
                     "notes": "Could not parse structured response"
                 }
     except urllib.error.URLError:
-        print("  ✗ Cannot reach Ollama. Is it running? Try: brew services start ollama")
+        print("  ✗ Cannot reach Ollama. Start it with:")
+        print("    OLLAMA_FLASH_ATTENTION=1 /opt/homebrew/opt/ollama/bin/ollama serve")
         sys.exit(1)
     except json.JSONDecodeError as e:
         return {
@@ -112,7 +113,6 @@ def analyze_photo(image_path: Path) -> dict:
 
 def append_to_log(image_path: Path, analysis: dict, day: int):
     """Append analysis result to photo-log.md."""
-    timestamp = datetime.now().strftime("%H:%M")
     filename = image_path.name
 
     row = (
@@ -128,7 +128,6 @@ def append_to_log(image_path: Path, analysis: dict, day: int):
     day_header = f"## Day {day} —"
 
     if day_header in log_content:
-        # Find the day section and append before the next ## or end
         lines = log_content.split("\n")
         insert_idx = None
         in_section = False
@@ -152,14 +151,13 @@ def append_to_log(image_path: Path, analysis: dict, day: int):
 
 
 def process_photo(image_path: Path, day: int, verbose: bool = True):
-    """Analyze a single photo and log results."""
     if not image_path.exists():
         print(f"  ✗ File not found: {image_path}")
         return None
 
     if verbose:
         print(f"\n📸 Analyzing: {image_path.name}")
-        print("   Sending to llama3.2-vision:11b...")
+        print("   Sending to qwen2.5vl:7b (Metal GPU)...")
 
     analysis = analyze_photo(image_path)
     append_to_log(image_path, analysis, day)
