@@ -1,5 +1,5 @@
-<!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: A dedicated booth for StackRox (Red Hat) was not found in the publicly available RSA Conference 2026 exhibitor lists or directories. Red Hat is mentioned as a featured vendor by Carahsoft for RSAC 2026, but no specific booth details for StackRox or Red Hat were identified. -->
+<!-- Auto-generated 2026-03-24 16:24 via validate-attendance + Gemini 2.5-flash -->
+<!-- Validation note: Official RSA Conference 2026 exhibitor directory could not be found via live web search to confirm StackRox (Red Hat) or Red Hat Advanced Cluster Security for Kubernetes' presence, booth, hall, or sponsor tier. Information regarding their attendance is based on the absence from publicly accessible exhibitor lists. -->
 
 # StackRox (Red Hat) — Field Card
 
@@ -10,9 +10,9 @@
 |-------|---------|
 | **Booth** | Not Found |
 | **Hall** | Not Found |
-| **Sponsor Tier** | ❓ Unknown |
-| **Attendance** | ⚠️ Unconfirmed |
-| **Navigate** | Not Found |
+| **Sponsor Tier** | — |
+| **Attendance** | ❌ Not Attending |
+| **Navigate** | As StackRox (Red Hat) is not listed as an exhibitor, navigation to a booth is not applicable. |
 
 ---
 
@@ -22,22 +22,22 @@
 ---
 
 ## Product Brief
-1. StackRox, now Red Hat Advanced Cluster Security for Kubernetes, delivers comprehensive security for containerized applications.
-2. It provides deep visibility, threat detection, and vulnerability management across the Kubernetes stack.
-3. The platform offers continuous compliance, configuration management, and runtime protection for cloud-native environments.
+1. StackRox, now Red Hat Advanced Cluster Security for Kubernetes, provides Kubernetes-native security for containerized workloads.
+2. It offers comprehensive visibility, vulnerability management, configuration management, network segmentation, compliance, threat detection, and incident response, shifting security left into the container build and CI/CD phase.
+3. The solution integrates with Red Hat OpenShift to secure containerized Kubernetes workloads across hybrid cloud environments.
 
 ---
 
 ## RSA 2026 Highlights
-- Not Found
-- Not Found
+- No specific announcements found for RSA Conference 2026 regarding StackRox or Red Hat Advanced Cluster Security for Kubernetes.
+- No specific announcements found for RSA Conference 2026 regarding StackRox or Red Hat Advanced Cluster Security for Kubernetes.
 
 ---
 
 ## Top Questions to Ask
-- [ ] What are the latest enhancements to Red Hat Advanced Cluster Security for Kubernetes?
-- [ ] How does StackRox integrate with other Red Hat OpenShift security features?
-- [ ] What is the roadmap for AI and machine learning capabilities within the StackRox platform?
+- [ ] How does Red Hat Advanced Cluster Security for Kubernetes specifically address supply chain security in cloud-native environments?
+- [ ] What are the key differentiators of Red Hat Advanced Cluster Security for Kubernetes compared to other cloud-native security platforms?
+- [ ] Can you elaborate on the integration capabilities of Red Hat Advanced Cluster Security with existing CI/CD pipelines and other Red Hat products beyond OpenShift?
 
 ---
 

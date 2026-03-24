@@ -1,5 +1,5 @@
-<!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: Specific exhibitor details for Arista Networks at RSA Conference 2026, including booth number, hall, and sponsor tier, were not readily available through live web search during the conference dates. Product brief and questions are based on general company information and cybersecurity focus. -->
+<!-- Auto-generated 2026-03-24 16:24 via validate-attendance + Gemini 2.5-flash -->
+<!-- Validation note: Arista Networks is not listed as an official exhibitor at RSA Conference 2026. Confirmed not attending via Gemini search of rsaconference.com. -->
 
 # Arista Networks — Field Card
 
@@ -11,8 +11,8 @@
 | **Booth** | Not Found |
 | **Hall** | Not Found |
 | **Sponsor Tier** | ❓ Unknown |
-| **Attendance** | ⚠️ Unconfirmed |
-| **Navigate** | Booth location not found, unable to provide navigation from Moscone main entrance. |
+| **Attendance** | ❌ Not Attending |
+| **Navigate** | Not Found |
 
 ---
 
@@ -22,22 +22,22 @@
 ---
 
 ## Product Brief
-1. Arista Networks provides data-driven, client-to-cloud networking solutions with a strong focus on network security.
-2. Their core technologies include zero trust networking, network segmentation, advanced threat management, and AI-enabled network security.
-3. Arista differentiates itself by offering a unified and integrated architecture for real-time visibility and action across campus, data center, and cloud environments.
+1. Arista Networks provides data-driven, client-to-cloud networking solutions for large data center, campus, and routing environments.
+2. Their core technologies include zero trust networking, network segmentation, and AI-driven network detection and response (NDR).
+3. They offer a unified and integrated architecture that provides real-time visibility of the threat posture across the network and the ability to take action.
 
 ---
 
 ## RSA 2026 Highlights
-- Not Found
-- Not Found
+- Potential discussions around their new liquid-cooled pluggable optic modules for AI data centers, announced in March 2026.
+- Showcasing advancements in campus wireless technology with AI capabilities and zero trust networking solutions, aligning with recent product updates.
 
 ---
 
 ## Top Questions to Ask
-- [ ] How does Arista's zero trust approach integrate with existing enterprise security frameworks?
-- [ ] What are the latest advancements in Arista's AI-enabled network security and NDR offerings?
-- [ ] Can Arista provide insights into securing hybrid cloud environments with their solutions?
+- [ ] What are Arista Networks' latest innovations in AI-driven network security for hybrid cloud environments?
+- [ ] How do Arista's zero trust networking solutions integrate with existing security infrastructures to enhance threat detection and response?
+- [ ] What is Arista's strategy for securing the evolving attack surface, particularly with the rise of agentic AI in enterprise networks?
 
 ---
 

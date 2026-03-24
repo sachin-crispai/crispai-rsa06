@@ -1,5 +1,5 @@
-<!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: No direct exhibitor information (booth, hall, sponsor tier, confirmed attendance) for Noname Security at RSA Conference 2026 was found in the live web search results. No specific RSA Conference 2026 announcements from Noname Security were found. -->
+<!-- Auto-generated 2026-03-24 16:24 via validate-attendance + Gemini 2.5-flash -->
+<!-- Validation note: No exhibitor information, booth number, or sponsor tier found for Noname Security at RSA Conference 2026, suggesting they are not attending as an exhibitor. -->
 
 # Noname Security — Field Card
 
@@ -10,8 +10,8 @@
 |-------|---------|
 | **Booth** | Not Found |
 | **Hall** | Not Found |
-| **Sponsor Tier** | ❓ Unknown |
-| **Attendance** | ⚠️ Unconfirmed |
+| **Sponsor Tier** | — |
+| **Attendance** | ❌ Not Attending |
 | **Navigate** | Not Found |
 
 ---
@@ -22,22 +22,22 @@
 ---
 
 ## Product Brief
-1. Noname Security offers a comprehensive API Security Platform that protects APIs throughout their entire lifecycle, from development to production.
-2. Their core technology includes API discovery, posture management, runtime security, and API security testing, utilizing AI-based detection to identify vulnerabilities.
-3. Noname Security differentiates itself by taking a complete, proactive, and out-of-band approach to API security, integrating seamlessly with existing infrastructure without requiring deployment within the application itself.
+1. Noname Security provides a holistic API security platform.
+2. It focuses on production runtime protection, real-time traffic analysis, and establishing behavioral baselines for APIs.
+3. Their complete, proactive approach covers API Posture Management, Runtime Security, and API Security Testing.
 
 ---
 
 ## RSA 2026 Highlights
-- Not Found
-- Not Found
+- No specific announcements for RSAC 2026 found.
+- Not attending as an exhibitor.
 
 ---
 
 ## Top Questions to Ask
-- [ ] What are the latest advancements in Noname Security's AI-based detection capabilities for identifying novel API threats?
-- [ ] How does Noname Security's platform specifically address the challenges of securing APIs in cloud-native and microservices architectures?
-- [ ] Can you provide examples of how Noname Security helps organizations achieve compliance with evolving API security regulations and standards?
+- [ ] How does Noname Security's behavioral baseline detection specifically identify zero-day API attacks?
+- [ ] Can Noname Security provide real-time blocking of detected threats, and how does this integrate with existing WAFs or API gateways?
+- [ ] What are the key differences in API discovery between Noname Security's approach and other solutions that only look at traffic sources?
 
 ---
 

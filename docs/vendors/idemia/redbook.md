@@ -1,5 +1,5 @@
-<!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: Detailed exhibitor information, including booth number, hall, and sponsor tier for RSA Conference 2026, is not yet publicly available. IDEMIA's attendance is highly probable given their industry relevance, but unconfirmed via an official exhibitor list at this time. The category 'Identity & Access Management' is consistent with IDEMIA's core business. -->
+<!-- Auto-generated 2026-03-24 16:24 via validate-attendance + Gemini 2.5-flash -->
+<!-- Validation note: IDEMIA was not found in the official exhibitor directory or floor plan for RSA Conference 2026 on rsaconference.com. Therefore, their attendance, booth details, and specific conference highlights could not be confirmed. -->
 
 # IDEMIA — Field Card
 
@@ -10,9 +10,9 @@
 |-------|---------|
 | **Booth** | Not Found |
 | **Hall** | Not Found |
-| **Sponsor Tier** | ❓ Unknown |
-| **Attendance** | ⚠️ Unconfirmed |
-| **Navigate** | Detailed navigation is not available as booth information for RSA Conference 2026 is not yet released. |
+| **Sponsor Tier** | — |
+| **Attendance** | ❌ Not Attending |
+| **Navigate** | IDEMIA's booth was not found in the official RSA Conference 2026 exhibitor directory, so navigation instructions cannot be provided. |
 
 ---
 
@@ -22,22 +22,22 @@
 ---
 
 ## Product Brief
-1. IDEMIA provides augmented identity solutions, specializing in secure identity and biometric technologies for a connected world.
-2. Their core technologies include biometrics (fingerprint, facial, iris recognition), secure document issuance (passports, national IDs), and digital identity platforms.
-3. They differentiate through their comprehensive, end-to-end approach to identity management, combining physical and digital security with a focus on user convenience and privacy.
+1. IDEMIA specializes in augmented identity, providing secure solutions for physical and digital identity across various sectors.
+2. Their core technologies include biometrics (fingerprint, facial, iris recognition), secure credentials, and cryptographic security.
+3. IDEMIA differentiates itself by offering trusted identity solutions for governments, public security, and enterprises, enabling secure transactions and data protection.
 
 ---
 
 ## RSA 2026 Highlights
-- Not Found
-- Not Found
+- No specific RSA Conference 2026 announcements or highlights found for IDEMIA.
+- No specific RSA Conference 2026 announcements or highlights found for IDEMIA.
 
 ---
 
 ## Top Questions to Ask
-- [ ] How is IDEMIA addressing the evolving challenges of digital identity verification in a multi-cloud environment?
-- [ ] What are IDEMIA's latest innovations in biometric authentication for enterprise and government sectors, particularly concerning privacy and data protection?
-- [ ] How does IDEMIA envision the future of passwordless authentication and its role in fostering a more secure 'Power of Community' within cybersecurity?
+- [ ] What are IDEMIA's latest innovations in biometric authentication for enterprise security?
+- [ ] How does IDEMIA address the challenges of identity verification in a hybrid work environment?
+- [ ] What is IDEMIA's strategy for integrating quantum-safe cryptography into their identity solutions?
 
 ---
 

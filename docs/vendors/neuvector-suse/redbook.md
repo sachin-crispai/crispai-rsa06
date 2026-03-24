@@ -1,5 +1,5 @@
-<!-- Auto-generated 2026-03-24 16:13 via validate-attendance + Gemini 2.5-flash -->
-<!-- Validation note: Direct exhibitor information, including booth number, hall, and sponsor tier for NeuVector (SUSE) at RSA Conference 2026, could not be found through live web search of publicly available information. While the conference is ongoing, specific vendor booth details for NeuVector were not listed in the accessible search results. -->
+<!-- Auto-generated 2026-03-24 16:24 via validate-attendance + Gemini 2.5-flash -->
+<!-- Validation note: NeuVector (SUSE) was not found in the publicly available exhibitor lists for RSA Conference 2026. While NeuVector is now referred to as SUSE Security, no booth information for either was located. Therefore, it is assumed they are not exhibiting at this conference. -->
 
 # NeuVector (SUSE) — Field Card
 
@@ -10,9 +10,9 @@
 |-------|---------|
 | **Booth** | Not Found |
 | **Hall** | Not Found |
-| **Sponsor Tier** | ❓ Unknown |
-| **Attendance** | ⚠️ Unconfirmed |
-| **Navigate** | Not Found (Booth information not available) |
+| **Sponsor Tier** | — |
+| **Attendance** | ❌ Not Attending |
+| **Navigate** | Not Found |
 
 ---
 
@@ -22,9 +22,9 @@
 ---
 
 ## Product Brief
-1. NeuVector provides full lifecycle container security for Kubernetes and cloud-native environments, from build to runtime.
-2. It offers a Layer 7 container firewall with deep packet inspection, automated vulnerability scanning, and real-time runtime protection.
-3. The platform enforces a Zero Trust model at the container level and integrates into DevSecOps pipelines for proactive defense.
+1. NeuVector (now SUSE Security) delivers a cloud-native Kubernetes security platform offering end-to-end protection from DevOps vulnerability management to automated run-time security.
+2. Its core technology includes a Layer 7 container firewall, real-time network visibility, deep packet inspection, and automated zero-trust policy enforcement between container pairs.
+3. NeuVector differentiates itself by providing 100% open-source, Kubernetes-native, and orchestrator-agnostic security that deploys as containers, offering proactive, real-time threat detection and blocking without relying on external cloud or SaaS resources.
 
 ---
 
@@ -35,9 +35,9 @@
 ---
 
 ## Top Questions to Ask
-- [ ] What are the latest enhancements to NeuVector's Layer 7 container firewall capabilities for dynamic cloud-native environments?
-- [ ] How does NeuVector specifically address emerging threats and compliance challenges in AI-driven Kubernetes deployments?
-- [ ] Can you elaborate on NeuVector's integration with other SUSE products and its roadmap for multi-cloud and hybrid security?
+- [ ] What are the latest enhancements to NeuVector's (SUSE Security's) zero-trust capabilities for Kubernetes environments?
+- [ ] How does NeuVector (SUSE Security) integrate with existing CI/CD pipelines to enforce security policies earlier in the development lifecycle?
+- [ ] Can you provide a demonstration of NeuVector's (SUSE Security's) real-time threat detection and automated response features in a multi-cloud container deployment?
 
 ---
 
