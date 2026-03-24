@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+"""
+Vendor-Research — CrispAI RSA 2026 Vendor Intelligence Agent
+Auto-populates docs/vendors/{slug}/research.md for each vendor using Gemini.
+
+Usage:
+    ./scripts/vendor-research --vendor "CrowdStrike"
+    ./scripts/vendor-research --vendor "HiddenLayer,Protect AI,Lakera"
+    ./scripts/vendor-research --priority          # run all AI-priority vendors
+    ./scripts/vendor-research --all               # run all 221 vendors (slow)
+
+Output: docs/vendors/{vendor-slug}/research.md
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+import urllib.request
+import urllib.error
+
+REPO_ROOT    = Path(__file__).parent.parent
+DOCS_DIR     = REPO_ROOT / "docs"
+VENDORS_DIR  = DOCS_DIR / "vendors"
+CLUSTERS_DIR = DOCS_DIR / "clusters"
+ENRICHED_DIR = DOCS_DIR / "enriched"
+
+RSA_EVENT = "RSA Conference 2026, March 23-26, Moscone Center, San Francisco"
+
+# Gemini pricing (2.5 flash)
+PRICE_IN  = 0.075 / 1_000_000
+PRICE_OUT = 0.30  / 1_000_000
+
+# ── Priority vendor list (AI/LLM/Robotics/Medical relevance) ─────────────────
+
+PRIORITY_VENDORS = [
+    # AI / LLM security
+    ("HiddenLayer",          "AI / ML Security",          "?"),
+    ("Protect AI",           "AI / ML Security",          "?"),
+    ("Lakera",               "AI / ML Security",          "?"),
+    ("Operant AI",           "AI / ML Security",          "?"),
+    ("CalypsoAI",            "AI / ML Security",          "?"),
+    ("Unbound AI",           "AI / ML Security",          "ESE-09"),
+    # Agentic / platform AI
+    ("CrowdStrike",          "Endpoint Security / EDR",   "N-5845"),
+    ("SentinelOne",          "Endpoint Security / EDR",   "Platinum Sponsor"),
+    ("Wiz",                  "Cloud Security / CNAPP",    "Gold Sponsor"),
+    ("Darktrace",            "AI-native Detection",       "?"),
+    ("Vectra AI",            "Network Security / NDR",    "Platinum Sponsor"),
+    ("Arctic Wolf",          "Managed Security / MSSP",   "?"),
+    ("Apiiro",               "AppSec / DevSecOps",        "S-3316"),
+    ("Snyk",                 "AppSec / DevSecOps",        "Gold Sponsor"),
+    # Cloud / infra AI workloads
+    ("Palo Alto Networks",   "Cloud / Endpoint / SASE",   "Diamond Sponsor"),
+    ("Microsoft Security",   "Cloud / Endpoint / SIEM",   "N-5744"),
+    ("Google / Mandiant",    "Threat Intel / Cloud",      "Platinum Sponsor"),
+    ("Cisco Security",       "Network / Zero Trust",      "Booth 6044"),
+    ("Rubrik",               "Data Security",             "Platinum Sponsor"),
+    # Medical / IoT / Robotics security
+    ("Armis",                "OT / ICS / IoT Security",   "Platinum Sponsor"),
+    ("Claroty",              "OT / ICS / IoT Security",   "?"),
+    ("Cylera",               "Medical IoT Security",      "?"),
+    ("Dragos",               "OT / ICS Security",         "?"),
+    ("Nozomi Networks",      "OT / ICS / IoT Security",   "?"),
+    # Emerging / Innovation Sandbox
+    ("Acalvio",              "Deception / Early Stage",   "?"),
+    ("Traceable AI",         "API Security",              "?"),
+    ("Cequence Security",    "API Security",              "?"),
+]
+
+
+# ── Env loader ────────────────────────────────────────────────────────────────
+
+def _load_env() -> dict:
+    env: dict = {}
+    ef = REPO_ROOT / ".env"
+    if ef.exists():
+        for line in ef.read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+_ENV = _load_env()
+
+def _key(name: str) -> str:
+    return os.environ.get(name, "") or _ENV.get(name, "")
+
+
+# ── Gemini call ───────────────────────────────────────────────────────────────
+
+def gemini(query: str, model: str = "gemini-2.5-flash") -> dict:
+    api_key = _key("GEMINI_API_KEY") or _key("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError("No GEMINI_API_KEY found in env / .env")
+
+    payload = json.dumps({
+        "contents": [{"role": "user", "parts": [{"text": query}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 3000},
+    }).encode()
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    req = urllib.request.Request(url, data=payload,
+                                 headers={"Content-Type": "application/json"},
+                                 method="POST")
+
+    with urllib.request.urlopen(req, timeout=90) as r:
+        data = json.loads(r.read())
+
+    answer = data["candidates"][0]["content"]["parts"][0]["text"]
+    usage  = data.get("usageMetadata", {})
+    citations = []
+    for chunk in data["candidates"][0].get("groundingMetadata", {}).get("groundingChunks", []):
+        uri = chunk.get("web", {}).get("uri", "")
+        if uri:
+            citations.append(uri)
+
+    return {
+        "answer": answer,
+        "citations": citations,
+        "in_tok":  usage.get("promptTokenCount", 0),
+        "out_tok": usage.get("candidatesTokenCount", 0),
+    }
+
+
+# ── Vendor profile query ──────────────────────────────────────────────────────
+
+def build_query(vendor: str, category: str, booth: str) -> str:
+    return f"""You are a cybersecurity analyst at {RSA_EVENT}.
+Research this vendor comprehensively for a field intelligence report.
+
+Vendor: {vendor}
+Category: {category}
+RSA 2026 Booth: {booth}
+
+Provide a structured markdown report with these exact sections:
+
+## RSA 2026
+- Booth number and hall (if known)
+- Any updated booth info from the conference floor
+
+## Company Profile
+- Employee count (approximate)
+- Founded year
+- HQ location
+- Funding stage or public status / ARR if known
+- Website URL
+
+## Technology Stack
+- Core technology and architecture
+- AI/ML frameworks or capabilities used
+- Cloud infrastructure and key integrations
+- Any proprietary models or data sources
+
+## Key Customers
+- Notable customer logos or named references
+- Key industries served
+- Any RSA 2026 customer stories or case studies mentioned
+
+## Product Brief
+- Main products and what problems they solve
+- How the core technology works
+- Pricing model (if known)
+
+## RSA 2026 Announcements
+- New product launches or demos at this conference
+- Partnerships announced
+- Key messages from their booth/keynote
+
+## CrispAI Relevance
+
+### LLM / AI Agents
+- How this vendor's technology applies to securing or enabling LLM pipelines, AI agents, MCP servers, or agentic workflows
+- Any specific LLM security features, prompt injection protection, model integrity tools
+
+### Robotics Security
+- Relevance to securing embedded AI, robotic systems, edge AI, ROS security, autonomous vehicles
+- OT/ICS capabilities applicable to robotic manufacturing or field robots
+
+### Medical / Healthcare AI
+- Medical device security, clinical AI data protection
+- HIPAA-relevant features, FDA compliance for AI medical devices
+- Any specific healthcare AI customers or use cases
+
+## Questions to Ask at Booth
+- Provide 3-5 specific, insightful questions a CrispAI analyst should ask
+
+Be factual. Use web search to find current RSA 2026 information. If booth number is unknown, say so.
+"""
+
+
+# ── Slug helper ───────────────────────────────────────────────────────────────
+
+def slugify(name: str) -> str:
+    s = name.lower()
+    s = re.sub(r"[/\\()\[\]{}]", "", s)
+    s = re.sub(r"[\s\-–—]+", "-", s)
+    s = re.sub(r"[^a-z0-9\-]", "", s)
+    return s.strip("-")[:50]
+
+
+# ── Save research file ────────────────────────────────────────────────────────
+
+def save_research(vendor: str, content: str, citations: list, category: str, booth: str) -> Path:
+    slug = slugify(vendor)
+    vendor_dir = VENDORS_DIR / slug
+    vendor_dir.mkdir(parents=True, exist_ok=True)
+    out = vendor_dir / "research.md"
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    cite_block = ""
+    if citations:
+        cite_block = "\n\n## Sources\n" + "\n".join(f"- {c}" for c in citations[:6])
+
+    header = (
+        f"<!-- Auto-generated {timestamp} via Gemini 2.5-flash + Google Search -->\n"
+        f"<!-- Category: {category} | Booth: {booth} | RSA 2026 -->\n\n"
+        f"# {vendor}\n\n"
+    )
+
+    out.write_text(header + content + cite_block + "\n")
+    return out
+
+
+# ── Rate limiter (token bucket) ──────────────────────────────────────────────
+# Gemini free tier: 15 RPM hard limit. We use 12 to stay safely under.
+
+class RateLimiter:
+    """Token-bucket rate limiter — allows up to `rate` calls per 60s."""
+    def __init__(self, rate: int = 100):
+        self._rate      = rate
+        self._tokens    = rate
+        self._last      = time.monotonic()
+        self._lock      = threading.Lock()
+
+    def acquire(self):
+        while True:
+            with self._lock:
+                now     = time.monotonic()
+                elapsed = now - self._last
+                self._tokens = min(self._rate,
+                                   self._tokens + elapsed * (self._rate / 60.0))
+                self._last  = now
+                if self._tokens >= 1:
+                    self._tokens -= 1
+                    return
+            time.sleep(0.5)
+
+
+# ── Extract vendor list from cluster docs ────────────────────────────────────
+
+def load_all_vendors() -> list[tuple[str, str, str]]:
+    """Returns list of (vendor_name, category, booth)."""
+    vendors = []
+    seen = set()
+    for f in sorted(CLUSTERS_DIR.glob("*.md")):
+        lines = f.read_text().splitlines()
+        cluster = (lines[0].replace("# Cluster ", "").replace("# ", "")
+                   .split("—")[-1].strip().split("(")[0].strip()) if lines else f.stem
+        for line in lines:
+            if line.startswith("| **") and line.count("|") >= 4:
+                cols = [c.strip().replace("**", "") for c in line.split("|") if c.strip()]
+                if len(cols) >= 3:
+                    name  = cols[0]
+                    booth = cols[2] if cols[2] not in ("—", "-", "") else "?"
+                    if name and name not in seen:
+                        seen.add(name)
+                        vendors.append((name, cluster[:40], booth))
+    return vendors
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Vendor-Research — auto-populate vendor intelligence profiles via Gemini",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+  ./scripts/vendor-research --vendor "CrowdStrike"
+  ./scripts/vendor-research --vendor "HiddenLayer,Protect AI,Lakera,Operant AI"
+  ./scripts/vendor-research --priority          # top 26 AI-relevant vendors
+  ./scripts/vendor-research --all               # all 221 vendors
+        """,
+    )
+    parser.add_argument("--vendor", "-v", metavar="NAME[,NAME...]",
+                        help="Vendor name(s) to research, comma-separated")
+    parser.add_argument("--priority", action="store_true",
+                        help="Research all AI-priority vendors (LLM/Robotics/Medical)")
+    parser.add_argument("--all", action="store_true",
+                        help="Research all vendors from cluster docs")
+    parser.add_argument("--model", default="gemini-2.5-flash",
+                        help="Gemini model (default: gemini-2.5-flash)")
+    parser.add_argument("--workers", "-w", type=int, default=25,
+                        help="Parallel workers (default: 25 for 100 RPM paid tier)")
+    args = parser.parse_args()
+
+    if not any([args.vendor, args.priority, args.all]):
+        parser.print_help()
+        sys.exit(0)
+
+    # Build work queue
+    if args.priority:
+        queue = PRIORITY_VENDORS
+    elif args.all:
+        queue = [(name, cat, booth) for name, cat, booth in load_all_vendors()]
+    else:
+        all_vendors = {v[0].lower(): v for v in load_all_vendors()}
+        queue = []
+        for name in [v.strip() for v in args.vendor.split(",") if v.strip()]:
+            match = all_vendors.get(name.lower())
+            queue.append(match if match else (name, "Unknown", "?"))
+
+    # Filter already-cached vendors
+    pending, skipped = [], []
+    for item in queue:
+        vendor, _, _ = item
+        out_path = VENDORS_DIR / slugify(vendor) / "research.md"
+        if out_path.exists():
+            age_h = (datetime.now().timestamp() - out_path.stat().st_mtime) / 3600
+            if age_h < 8:
+                skipped.append(vendor)
+                continue
+        pending.append(item)
+
+    workers   = min(args.workers, 100)  # paid tier supports up to 1000 RPM
+    limiter   = RateLimiter(rate=12)
+    total     = len(queue)
+    print_lock = threading.Lock()
+
+    print(f"Vendor research: {total} total · {len(skipped)} cached · "
+          f"{len(pending)} to fetch · {workers} workers · model: {args.model}\n")
+    if skipped:
+        print(f"  Skipping (cached): {', '.join(skipped[:8])}"
+              + (" …" if len(skipped) > 8 else "") + "\n")
+
+    # Thread-safe counters
+    counters = {"ok": 0, "fail": 0, "in_tok": 0, "out_tok": 0}
+    c_lock   = threading.Lock()
+    done     = [0]
+
+    def process(item: tuple) -> None:
+        vendor, category, booth = item
+        limiter.acquire()                           # respect 15 RPM
+        try:
+            query  = build_query(vendor, category, booth)
+            result = gemini(query, args.model)
+            path   = save_research(vendor, result["answer"], result["citations"],
+                                   category, booth)
+            cost   = result["in_tok"] * PRICE_IN + result["out_tok"] * PRICE_OUT
+            with c_lock:
+                counters["ok"]      += 1
+                counters["in_tok"]  += result["in_tok"]
+                counters["out_tok"] += result["out_tok"]
+                done[0]             += 1
+                n = done[0]
+            with print_lock:
+                print(f"  [{n:3}/{len(pending)}] {vendor:35s}  "
+                      f"✓ [{result['in_tok']}in/{result['out_tok']}out · ${cost:.4f}]")
+        except Exception as e:
+            with c_lock:
+                counters["fail"] += 1
+                done[0]          += 1
+                n = done[0]
+            with print_lock:
+                print(f"  [{n:3}/{len(pending)}] {vendor:35s}  ✗ {e}")
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(process, item): item for item in pending}
+        try:
+            for _ in as_completed(futures):
+                pass
+        except KeyboardInterrupt:
+            print("\nAborted — partial results saved.")
+
+    total_cost = counters["in_tok"] * PRICE_IN + counters["out_tok"] * PRICE_OUT
+    print(f"""
+────────────────────────────────────────
+  Workers used       : {workers}
+  Vendors fetched    : {counters['ok']}  (failed: {counters['fail']}, cached: {len(skipped)})
+  Input tokens       : {counters['in_tok']:,}
+  Output tokens      : {counters['out_tok']:,}
+  Token cost         : ${total_cost:.4f}
+  Output directory   : docs/vendors/
+────────────────────────────────────────""")
+
+
+if __name__ == "__main__":
+    main()
