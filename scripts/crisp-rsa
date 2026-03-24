@@ -23,42 +23,34 @@ import urllib.error
 REPO_ROOT = Path(__file__).parent.parent
 DOCS_DIR = REPO_ROOT / "docs"
 OLLAMA_URL = "http://localhost:11434/api/generate"
-TEXT_MODEL = "qwen2.5:7b"
+TEXT_MODEL = "qwen2.5:32b"
 
-SYSTEM_PROMPT = """You are CrispAI's RSA Conference 2026 field assistant. You have deep knowledge of:
-- RSA Conference 2026 (March 23-26, Moscone Center, San Francisco)
-- All 24 vendor technology clusters and their key players
-- Booth locations (North Hall N- prefix, South Hall S- prefix, ESE- for Early Stage)
-- Security technology categories: IAM, Zero Trust, SIEM, EDR/XDR, CNAPP, SOAR, threat intel, etc.
-- Key questions to ask vendors at each booth
-
-You are running offline on a local LLM during the conference. Be concise, practical, and actionable.
-Focus on helping the user navigate the conference floor, compare vendors, and capture useful notes.
-When listing vendors, always include booth numbers if known."""
+SYSTEM_PROMPT = """You are CrispAI's RSA Conference 2026 field assistant.
+STRICT RULE: Answer ONLY using facts from the KNOWLEDGE BASE below. Do NOT invent vendor names, booth numbers, or any data not present in the knowledge base. If a fact is not in the knowledge base, say "not in my data".
+Be concise, practical, and actionable. Always include real booth numbers when listing vendors."""
 
 
 def load_redbook_context() -> str:
-    """Load key redbook documents as context."""
+    """Load focused redbook data — full redbook + vendor tables from each cluster."""
     context_parts = []
 
-    # Main redbook
+    # Full redbook (contains the booth table and floor map)
     redbook = DOCS_DIR / "redbook" / "rsa_redbook.md"
     if redbook.exists():
-        content = redbook.read_text()
-        # Truncate to keep context manageable — take key sections
-        context_parts.append(f"=== RSA REDBOOK ===\n{content[:6000]}")
+        context_parts.append(f"=== RSA REDBOOK (floor map, booths, schedule) ===\n{redbook.read_text()}")
 
-    # Load all cluster docs (summarized)
+    # From each cluster: extract only the vendor table (lines with | Vendor | )
     clusters_dir = DOCS_DIR / "clusters"
     if clusters_dir.exists():
-        cluster_summaries = []
+        tables = []
         for f in sorted(clusters_dir.glob("*.md")):
-            text = f.read_text()
-            # Take first 800 chars of each cluster doc (vendor table + description)
-            cluster_summaries.append(f"--- {f.stem} ---\n{text[:800]}")
-        if cluster_summaries:
-            context_parts.append("=== VENDOR CLUSTERS ===\n" + "\n\n".join(cluster_summaries[:12]))
-            context_parts.append("=== VENDOR CLUSTERS (continued) ===\n" + "\n\n".join(cluster_summaries[12:]))
+            lines = f.read_text().splitlines()
+            header = lines[0].replace("# ", "") if lines else f.stem
+            table_lines = [l for l in lines if l.startswith("|") and ("Vendor" in l or "---" in l or l.count("|") >= 4)]
+            if table_lines:
+                tables.append(f"-- {header} --\n" + "\n".join(table_lines[:20]))
+        if tables:
+            context_parts.append("=== VENDOR TABLES BY CLUSTER ===\n" + "\n\n".join(tables))
 
     return "\n\n".join(context_parts)
 
@@ -79,11 +71,11 @@ def ask_ollama(question: str, context: str, history: list = None) -> str:
     payload = json.dumps({
         "model": TEXT_MODEL,
         "prompt": full_prompt,
-        "stream": False,
+        "stream": True,
         "options": {
             "temperature": 0.3,
             "num_predict": 1024,
-            "num_ctx": 8192,
+            "num_ctx": 32768,
         }
     }).encode("utf-8")
 
@@ -95,9 +87,20 @@ def ask_ollama(question: str, context: str, history: list = None) -> str:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-            return result.get("response", "No response received.").strip()
+        tokens = []
+        with urllib.request.urlopen(req, timeout=600) as resp:
+            for line in resp:
+                line = line.strip()
+                if not line:
+                    continue
+                chunk = json.loads(line.decode("utf-8"))
+                token = chunk.get("response", "")
+                tokens.append(token)
+                print(token, end="", flush=True)
+                if chunk.get("done"):
+                    break
+        print()  # newline after streaming
+        return "".join(tokens).strip()
     except urllib.error.URLError:
         return "✗ Cannot reach Ollama. Try: brew services start ollama"
 

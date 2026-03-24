@@ -25,7 +25,7 @@ import urllib.error
 REPO_ROOT = Path(__file__).parent.parent
 PHOTO_LOG = REPO_ROOT / "docs" / "field-notes" / "photo-log.md"
 OLLAMA_URL = "http://localhost:11434/api/generate"
-VISION_MODEL = "llama3.2-vision:11b"
+VISION_MODEL = "qwen2.5vl:7b"
 
 PROMPT = """You are analyzing a photo taken at RSA Conference 2026 at Moscone Center, San Francisco.
 
