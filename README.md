@@ -15,24 +15,91 @@
 | `docs/clusters/` | 24 vendor technology clusters with key players & booth numbers |
 | `docs/field-notes/` | Per-day capture templates + photo log |
 | `scripts/setup-ollama.sh` | One-command local LLM install (Ollama + models) |
-| `scripts/crisp-rsa` | Offline CLI: ask questions against the redbook |
-| `scripts/photo-ingest.py` | Batch photo → vendor notes via local vision LLM |
+| `scripts/scout` | **Scout** — offline text agent, ask questions against the redbook |
+| `scripts/hawk` | **Hawk** — vision agent, analyzes booth photos → structured vendor notes |
 | `scripts/convert-photos.sh` | HEIC (iPhone) + NEF (Nikon) → JPEG converter |
 
-## Quick Start — On-Site Setup
+## Operating Manual
+
+### Prerequisites — Run Once Before the Conference (on WiFi)
 
 ```bash
-# 1. Install local LLM stack (do this on WiFi before the conference)
+# Install Ollama + pull models (qwen2.5:32b + qwen2.5vl:7b, ~26GB total)
 bash scripts/setup-ollama.sh
+```
 
-# 2. Convert photos to JPEG for LLM analysis
-bash scripts/convert-photos.sh ~/Pictures/RSA2026/
+### Starting the LLM Engine
 
-# 3. Analyze a booth photo
-python scripts/photo-ingest.py ~/Pictures/RSA2026/booth_crowdstrike.jpg
+Start Ollama before using Scout or Hawk. Run this in a terminal and leave it open:
 
-# 4. Ask the redbook offline
-./scripts/crisp-rsa "What booths are in the North Hall?"
+```bash
+OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
+  /opt/homebrew/opt/ollama/bin/ollama serve
+```
+
+---
+
+### Scout — Field Intelligence Agent (Text)
+
+Scout answers questions about RSA vendors, booth locations, and clusters using the redbook. Works fully offline.
+
+```bash
+# Single question
+./scripts/scout "Which booths should I visit for CNAPP?"
+./scripts/scout "What should I ask at the Wiz booth?"
+./scripts/scout "Compare CrowdStrike and SentinelOne"
+./scripts/scout "Which vendors are in the North Hall?"
+
+# Interactive chat mode (multi-turn)
+./scripts/scout --chat
+
+# Use a different model
+./scripts/scout --model qwen2.5:7b "Quick question about IAM vendors"
+```
+
+---
+
+### Hawk — Vision Agent (Photo Analysis)
+
+Hawk analyzes booth photos and extracts vendor name, booth number, product category, and key messaging. Results are automatically logged to `docs/field-notes/photo-log.md`.
+
+**Step 1 — Convert photos from iPhone/Nikon to JPEG:**
+
+```bash
+bash scripts/convert-photos.sh ~/Desktop/RSA-Day1/
+# Output lands in ~/Desktop/RSA-Day1/jpeg/
+```
+
+**Step 2 — Analyze photos:**
+
+```bash
+# Single photo
+./scripts/hawk ~/Desktop/RSA-Day1/jpeg/booth_001.jpg --day 1
+
+# Entire directory (batch)
+./scripts/hawk ~/Desktop/RSA-Day1/jpeg/ --day 1
+
+# Day 2, Day 3, Day 4
+./scripts/hawk ~/Desktop/RSA-Day2/jpeg/ --day 2
+```
+
+**Results appear in:** `docs/field-notes/photo-log.md`
+
+---
+
+### Daily Workflow On-Site
+
+```bash
+# Morning — start the engine
+OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
+  /opt/homebrew/opt/ollama/bin/ollama serve
+
+# On the floor — ask Scout for intel
+./scripts/scout "What are the top booths for Zero Trust?"
+
+# After the floor — process today's photos
+bash scripts/convert-photos.sh ~/Desktop/RSA-DayN/
+./scripts/hawk ~/Desktop/RSA-DayN/jpeg/ --day N
 ```
 
 ## 24 Vendor Clusters

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-CrispAI RSA 2026 — Booth Photo Analyzer
+Hawk — CrispAI RSA 2026 Vision Agent (Photo Analyzer)
 Analyzes booth photos using local Ollama vision LLM (qwen2.5vl:7b)
 and appends structured notes to docs/field-notes/photo-log.md
 
 Usage:
-    python scripts/photo-ingest.py <photo.jpg>          # single photo
-    python scripts/photo-ingest.py <directory/>         # batch all JPEGs
-    python scripts/photo-ingest.py booth.jpg --day 2    # tag with day number
+    ./scripts/hawk <photo.jpg>          # single photo
+    ./scripts/hawk <directory/>         # batch all JPEGs
+    ./scripts/hawk booth.jpg --day 2    # tag with day number
 """
 
 import argparse
@@ -188,7 +188,7 @@ def main():
     target = Path(args.target)
     day = args.day
 
-    print(f"CrispAI RSA 2026 — Photo Analyzer")
+    print(f"Hawk — CrispAI Vision Agent")
     print(f"Model : {args.model}")
     print(f"Day   : {day}")
     print("─" * 40)

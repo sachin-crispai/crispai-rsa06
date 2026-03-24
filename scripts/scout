@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-CrispAI RSA 2026 — Offline Redbook Assistant
+Scout — CrispAI RSA 2026 Field Intelligence Agent (Text)
 Ask questions about RSA vendors, clusters, and floor plan — no internet needed.
 Powered by local Ollama (qwen2.5:32b) with compact redbook context.
 
 Usage:
-    ./scripts/crisp-rsa "Which booths are in the North Hall?"
-    ./scripts/crisp-rsa "Compare CrowdStrike and SentinelOne"
-    ./scripts/crisp-rsa "What should I ask at the Wiz booth?"
-    ./scripts/crisp-rsa --chat    # interactive chat mode
+    ./scripts/scout "Which booths are in the North Hall?"
+    ./scripts/scout "Compare CrowdStrike and SentinelOne"
+    ./scripts/scout "What should I ask at the Wiz booth?"
+    ./scripts/scout --chat    # interactive chat mode
 """
 
 import argparse
@@ -119,7 +119,7 @@ def ask_ollama(question: str, context: str, history: list = None) -> str:
 
 def chat_mode(context: str):
     """Interactive multi-turn chat mode."""
-    print("\nCrispAI RSA Assistant — Chat Mode")
+    print("\nScout — CrispAI Field Intelligence Agent")
     print("Type 'exit' or Ctrl+C to quit\n")
     print("─" * 50)
 
@@ -144,7 +144,7 @@ def chat_mode(context: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="CrispAI RSA 2026 offline assistant"
+        description="Scout — CrispAI RSA 2026 field intelligence agent"
     )
     parser.add_argument("question", nargs="?",
                         help="Question to ask (omit for --chat mode)")
@@ -157,10 +157,10 @@ def main():
     if not args.question and not args.chat:
         parser.print_help()
         print("\nExamples:")
-        print('  ./scripts/crisp-rsa "Which booths are in the North Hall?"')
-        print('  ./scripts/crisp-rsa "What should I ask at the Wiz booth?"')
-        print('  ./scripts/crisp-rsa "Compare CrowdStrike and SentinelOne"')
-        print('  ./scripts/crisp-rsa --chat')
+        print('  ./scripts/scout "Which booths are in the North Hall?"')
+        print('  ./scripts/scout "What should I ask at the Wiz booth?"')
+        print('  ./scripts/scout "Compare CrowdStrike and SentinelOne"')
+        print('  ./scripts/scout --chat')
         sys.exit(0)
 
     print("Loading redbook context...", end=" ", flush=True)
