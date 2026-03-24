@@ -1,0 +1,406 @@
+#!/usr/bin/env python3
+"""
+Validate-Attendance — CrispAI RSA 2026
+Cross-validates each vendor's booth, hall, sponsor tier, and cluster against
+the live RSA 2026 floor plan via Gemini, then writes a redbook.md skeleton
+in each vendor directory.
+
+Usage:
+    ./scripts/validate-attendance                  # all vendors
+    ./scripts/validate-attendance --vendor "Wiz,CrowdStrike"
+    ./scripts/validate-attendance --unknown-only   # only booths marked '?'
+    ./scripts/validate-attendance --workers 25     # parallel workers
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+import urllib.request
+import urllib.error
+
+REPO_ROOT    = Path(__file__).parent.parent
+DOCS_DIR     = REPO_ROOT / "docs"
+VENDORS_DIR  = DOCS_DIR / "vendors"
+CLUSTERS_DIR = DOCS_DIR / "clusters"
+
+RSA_EVENT = "RSA Conference 2026, March 23-26, Moscone Center, San Francisco"
+
+PRICE_IN  = 0.075 / 1_000_000
+PRICE_OUT = 0.30  / 1_000_000
+
+
+# ── Env / key loader ──────────────────────────────────────────────────────────
+
+def _load_env() -> dict:
+    env: dict = {}
+    ef = REPO_ROOT / ".env"
+    if ef.exists():
+        for line in ef.read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+_ENV = _load_env()
+
+def _key(name: str) -> str:
+    return os.environ.get(name, "") or _ENV.get(name, "")
+
+
+# ── Rate limiter ──────────────────────────────────────────────────────────────
+
+class RateLimiter:
+    def __init__(self, rate: int = 100):
+        self._rate   = rate
+        self._tokens = float(rate)
+        self._last   = time.monotonic()
+        self._lock   = threading.Lock()
+
+    def acquire(self):
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                self._tokens = min(self._rate,
+                                   self._tokens + (now - self._last) * (self._rate / 60.0))
+                self._last = now
+                if self._tokens >= 1:
+                    self._tokens -= 1
+                    return
+            time.sleep(0.3)
+
+
+# ── Gemini call ───────────────────────────────────────────────────────────────
+
+def gemini(query: str, model: str = "gemini-2.5-flash") -> dict:
+    api_key = _key("GEMINI_API_KEY") or _key("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError("No GEMINI_API_KEY")
+
+    payload = json.dumps({
+        "contents": [{"role": "user", "parts": [{"text": query}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 4096},
+    }).encode()
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    req = urllib.request.Request(url, data=payload,
+                                 headers={"Content-Type": "application/json"},
+                                 method="POST")
+    with urllib.request.urlopen(req, timeout=60) as r:
+        data = json.loads(r.read())
+
+    answer = data["candidates"][0]["content"]["parts"][0]["text"]
+    usage  = data.get("usageMetadata", {})
+    return {
+        "answer":    answer,
+        "in_tok":    usage.get("promptTokenCount", 0),
+        "out_tok":   usage.get("candidatesTokenCount", 0),
+    }
+
+
+# ── Validation query ──────────────────────────────────────────────────────────
+
+def build_validation_query(vendor: str, known_booth: str, known_cluster: str) -> str:
+    return f"""You are validating exhibitor data for {RSA_EVENT}.
+
+Vendor: {vendor}
+Currently recorded booth: {known_booth}
+Currently recorded category: {known_cluster}
+
+Using live web search, find and return ONLY the following as a JSON object (no markdown, no explanation):
+
+{{
+  "vendor": "{vendor}",
+  "booth": "<exact booth number or 'Not Found'>",
+  "hall": "<North Hall / South Hall / West Hall L1 / West Hall L2 / Early Stage Expo / Innovation Sandbox / Not Found>",
+  "sponsor_tier": "<Diamond / Platinum / Gold / Exhibitor / ESE Participant / Not Attending / Unknown>",
+  "attending": "<Confirmed / Unconfirmed / Not Attending>",
+  "cluster": "<corrected category name or same as recorded>",
+  "navigate": "<one sentence: how to reach booth from Moscone main entrance>",
+  "product_brief": ["<line 1: what they do>", "<line 2: core tech>", "<line 3: differentiator>"],
+  "rsa_highlights": ["<announcement 1>", "<announcement 2>"],
+  "questions": ["<question 1>", "<question 2>", "<question 3>"],
+  "validation_note": "<any correction or confirmation note>"
+}}
+
+Return only the JSON. No other text."""
+
+
+# ── Slugify ───────────────────────────────────────────────────────────────────
+
+def slugify(name: str) -> str:
+    s = name.lower()
+    s = re.sub(r"[/\\()\[\]{}]", "", s)
+    s = re.sub(r"[\s\-–—]+", "-", s)
+    s = re.sub(r"[^a-z0-9\-]", "", s)
+    return s.strip("-")[:50]
+
+
+# ── Parse JSON from Gemini response ──────────────────────────────────────────
+
+def parse_json(text: str) -> dict:
+    # Strip markdown fences if present
+    text = re.sub(r"```json\s*", "", text)
+    text = re.sub(r"```\s*", "", text)
+    text = text.strip()
+    # Try complete JSON first
+    m = re.search(r"\{[\s\S]+\}", text)
+    if m:
+        try:
+            return json.loads(m.group())
+        except json.JSONDecodeError:
+            pass
+    # Repair: find opening { and attempt to close truncated JSON
+    start = text.find("{")
+    if start != -1:
+        fragment = text[start:]
+        # Count unclosed braces/brackets and close them
+        for attempt in [fragment + '"}', fragment + '", "validation_note": "truncated"]}']:
+            try:
+                return json.loads(attempt)
+            except Exception:
+                pass
+        # Last resort: extract key fields with regex
+        fields = {}
+        for key in ("vendor", "booth", "hall", "sponsor_tier", "attending", "cluster"):
+            m2 = re.search(rf'"{key}"\s*:\s*"([^"]*)"', fragment)
+            if m2:
+                fields[key] = m2.group(1)
+        if fields:
+            return fields
+    raise ValueError(f"No JSON found in response: {text[:200]}")
+
+
+# ── Write redbook.md ──────────────────────────────────────────────────────────
+
+ATTENDANCE_ICON = {
+    "Confirmed":    "✅ Confirmed",
+    "Unconfirmed":  "⚠️ Unconfirmed",
+    "Not Attending": "❌ Not Attending",
+}
+
+TIER_ICON = {
+    "Diamond":      "💎 Diamond",
+    "Platinum":     "🥈 Platinum",
+    "Gold":         "🥇 Gold",
+    "Exhibitor":    "🎪 Exhibitor",
+    "ESE Participant": "🌱 ESE Participant",
+    "Not Attending": "—",
+    "Unknown":      "❓ Unknown",
+}
+
+def write_redbook(vendor_dir: Path, vendor: str, d: dict, timestamp: str) -> Path:
+    out = vendor_dir / "redbook.md"
+
+    booth      = d.get("booth", "?")
+    hall       = d.get("hall", "?")
+    tier       = d.get("sponsor_tier", "Unknown")
+    attending  = d.get("attending", "Unconfirmed")
+    cluster    = d.get("cluster", "?")
+    navigate   = d.get("navigate", "—")
+    brief      = d.get("product_brief", ["—", "—", "—"])
+    highlights = d.get("rsa_highlights", [])
+    questions  = d.get("questions", [])
+    note       = d.get("validation_note", "")
+
+    brief_text  = "\n".join(f"{i+1}. {l}" for i, l in enumerate(brief[:3]))
+    hl_text     = "\n".join(f"- {h}" for h in highlights[:3]) or "- TBD"
+    q_text      = "\n".join(f"- [ ] {q}" for q in questions[:5]) or "- [ ] TBD"
+
+    content = f"""<!-- Auto-generated {timestamp} via validate-attendance + Gemini 2.5-flash -->
+<!-- Validation note: {note} -->
+
+# {vendor} — Field Card
+
+> RSA 2026 · Moscone Center · March 23-26
+
+## Location
+| Field | Details |
+|-------|---------|
+| **Booth** | {booth} |
+| **Hall** | {hall} |
+| **Sponsor Tier** | {TIER_ICON.get(tier, tier)} |
+| **Attendance** | {ATTENDANCE_ICON.get(attending, attending)} |
+| **Navigate** | {navigate} |
+
+---
+
+## Category
+**Cluster:** {cluster}
+
+---
+
+## Product Brief
+{brief_text}
+
+---
+
+## RSA 2026 Highlights
+{hl_text}
+
+---
+
+## Top Questions to Ask
+{q_text}
+
+---
+
+## Visit Log
+| Field | Details |
+|-------|---------|
+| **Status** | ⬜ Not visited |
+| **Visited** | — |
+| **Contact met** | — |
+| **Collateral** | — |
+| **Follow-up by** | — |
+
+---
+
+## Quick Notes
+<!-- On-site notes here -->
+"""
+    out.write_text(content)
+    return out
+
+
+# ── Load vendor list from cluster docs ───────────────────────────────────────
+
+def load_vendors() -> list[tuple[str, str, str]]:
+    vendors, seen = [], set()
+    for f in sorted(CLUSTERS_DIR.glob("*.md")):
+        lines = f.read_text().splitlines()
+        cluster = (lines[0].replace("# Cluster ", "").replace("# ", "")
+                   .split("—")[-1].strip().split("(")[0].strip()) if lines else f.stem
+        for line in lines:
+            if line.startswith("| **") and line.count("|") >= 4:
+                cols = [c.strip().replace("**", "") for c in line.split("|") if c.strip()]
+                if len(cols) >= 3 and cols[0] and cols[0] not in seen:
+                    seen.add(cols[0])
+                    booth = cols[2] if cols[2] not in ("—", "-", "") else "?"
+                    vendors.append((cols[0], cluster[:40], booth))
+    return vendors
+
+
+# ── Main ─────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Validate-Attendance — cross-validate booths + write redbook.md skeletons",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+  ./scripts/validate-attendance                        # all 185 vendors
+  ./scripts/validate-attendance --unknown-only         # only booth='?' vendors (114)
+  ./scripts/validate-attendance --vendor "Wiz,Armis"
+  ./scripts/validate-attendance --workers 25
+        """,
+    )
+    parser.add_argument("--vendor", "-v", metavar="NAME[,NAME...]")
+    parser.add_argument("--unknown-only", action="store_true",
+                        help="Only process vendors with booth='?'")
+    parser.add_argument("--workers", "-w", type=int, default=25)
+    parser.add_argument("--model", default="gemini-2.5-flash")
+    parser.add_argument("--force", action="store_true",
+                        help="Re-generate even if redbook.md already exists")
+    args = parser.parse_args()
+
+    all_vendors = load_vendors()
+    vendor_map  = {v[0].lower(): v for v in all_vendors}
+
+    if args.vendor:
+        queue = []
+        for name in [n.strip() for n in args.vendor.split(",") if n.strip()]:
+            queue.append(vendor_map.get(name.lower(), (name, "Unknown", "?")))
+    elif args.unknown_only:
+        queue = [(n, c, b) for n, c, b in all_vendors if b == "?"]
+    else:
+        queue = all_vendors
+
+    # Skip already-done unless --force
+    if not args.force:
+        pending, skipped = [], []
+        for item in queue:
+            rb = VENDORS_DIR / slugify(item[0]) / "redbook.md"
+            if rb.exists():
+                skipped.append(item[0])
+            else:
+                pending.append(item)
+    else:
+        pending, skipped = queue, []
+
+    workers    = min(args.workers, 100)
+    limiter    = RateLimiter(rate=100)
+    print_lock = threading.Lock()
+    c_lock     = threading.Lock()
+    counters   = {"ok": 0, "fail": 0, "in_tok": 0, "out_tok": 0}
+    done       = [0]
+    timestamp  = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    print(f"Validate-Attendance: {len(queue)} total · {len(skipped)} cached · "
+          f"{len(pending)} to validate · {workers} workers\n")
+
+    def process(item: tuple):
+        vendor, cluster, known_booth = item
+        limiter.acquire()
+        slug = slugify(vendor)
+        vendor_dir = VENDORS_DIR / slug
+        vendor_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            query  = build_validation_query(vendor, known_booth, cluster)
+            result = gemini(query, args.model)
+            data   = parse_json(result["answer"])
+            path   = write_redbook(vendor_dir, vendor, data, timestamp)
+            cost   = result["in_tok"] * PRICE_IN + result["out_tok"] * PRICE_OUT
+
+            booth_out = data.get("booth", "?")
+            attend    = data.get("attending", "?")
+            icon      = "✅" if attend == "Confirmed" else ("❌" if attend == "Not Attending" else "⚠️")
+
+            with c_lock:
+                counters["ok"]      += 1
+                counters["in_tok"]  += result["in_tok"]
+                counters["out_tok"] += result["out_tok"]
+                done[0] += 1
+                n = done[0]
+            with print_lock:
+                print(f"  [{n:3}/{len(pending)}] {vendor:35s} {icon} booth={booth_out:12s} "
+                      f"[{result['in_tok']}in/{result['out_tok']}out · ${cost:.4f}]")
+        except Exception as e:
+            with c_lock:
+                counters["fail"] += 1
+                done[0] += 1
+                n = done[0]
+            with print_lock:
+                print(f"  [{n:3}/{len(pending)}] {vendor:35s} ✗ {e}")
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(process, item): item for item in pending}
+        try:
+            for _ in as_completed(futures):
+                pass
+        except KeyboardInterrupt:
+            print("\nAborted.")
+
+    total_cost = counters["in_tok"] * PRICE_IN + counters["out_tok"] * PRICE_OUT
+    print(f"""
+────────────────────────────────────────
+  Workers used    : {workers}
+  Validated       : {counters['ok']}  (failed: {counters['fail']}, cached: {len(skipped)})
+  Input tokens    : {counters['in_tok']:,}
+  Output tokens   : {counters['out_tok']:,}
+  Token cost      : ${total_cost:.4f}
+  Redbooks saved  : docs/vendors/*/redbook.md
+────────────────────────────────────────""")
+
+
+if __name__ == "__main__":
+    main()
