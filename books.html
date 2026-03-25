@@ -770,6 +770,24 @@ function getSorted(list, key, dir) {
 }
 
 /* ───────── COVER URL ───────── */
+// Hardcoded confirmed-working cover URLs (verified March 2026)
+const coverOverride = {
+  // Wiley CDN (ISBN-10 based path)
+  "9781394374328": "https://media.wiley.com/product_data/coverImage300/21/13943743/1394374321.jpg", // Becoming Quantum Safe
+  "9781394169795": "https://media.wiley.com/product_data/coverImage300/95/13941697/1394169795.jpg", // DevSecOps Playbook
+  "9781394333738": "https://media.wiley.com/product_data/coverImage300/30/13943337/1394333730.jpg", // Securing Cloud Containers
+  "9781119892304": "https://media.wiley.com/product_data/coverImage300/09/11198923/1119892309.jpg", // How to Measure Anything
+  "9781119745303": "https://media.wiley.com/product_data/coverImage300/06/11197453/1119745306.jpg", // Blue Fox
+  // Packt CDN
+  "9781836203759": "https://static.packt-cdn.com/products/9781836203759/cover/smaller",             // AI-Native LLM Security
+  // Amazon CDN (ISBN-10 based)
+  "9780138268459": "https://m.media-amazon.com/images/P/0138268452.jpg",  // Beyond the Algorithm
+  "9780138293697": "https://m.media-amazon.com/images/P/0138293694.jpg",  // AI Revolution in Networking
+  "9781041166696": "https://m.media-amazon.com/images/P/1041166699.jpg",  // Quantum Ready
+  "9781041171676": "https://m.media-amazon.com/images/P/1041171676.jpg",  // Transforming Cybersecurity with ML
+  "9781968433017": "https://m.media-amazon.com/images/P/1968433015.jpg",  // Data Security in Age of AI
+};
+
 const coverCache = {}; // isbn → confirmed URL from Google Books API
 
 // Publisher brand colors for placeholder fallback
@@ -802,7 +820,7 @@ function checkGoogleCover(img, isbn, nextAttempt) {
 }
 
 function coverUrl(isbn) {
-  return coverCache[isbn] || `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
+  return coverOverride[isbn] || coverCache[isbn] || `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
 }
 
 function coverFallback(el, isbn, attempt) {
