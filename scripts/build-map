@@ -1,0 +1,721 @@
+#!/usr/bin/env python3
+"""
+Build-Map — CrispAI RSA 2026
+Generates a self-contained interactive HTML floor map of RSA 2026.
+
+Reads docs/maps/booth-index.json (vendor locations) and produces
+docs/maps/index.html — a single offline file with:
+  • Hall-by-hall floor plan views (image or schematic)
+  • Clickable vendor pins color-coded by cluster
+  • Sidebar with vendor info + direct link to redbook.md
+  • Search/filter by name, cluster, hall
+  • Visit status overlay (⬜ / ✅) from redbook Visit Log
+
+Usage:
+    ./scripts/build-map                    # generate map from booth-index.json
+    ./scripts/build-map --open             # generate and open in browser
+"""
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT   = Path(__file__).parent.parent
+DOCS_DIR    = REPO_ROOT / "docs"
+MAPS_DIR    = DOCS_DIR / "maps"
+VENDORS_DIR = DOCS_DIR / "vendors"
+CLUSTERS_DIR = DOCS_DIR / "clusters"
+
+# Cluster → colour mapping (matches the 24 cluster scheme)
+CLUSTER_COLORS = {
+    "AI / ML Security":               "#e74c3c",
+    "Endpoint Security / EDR":        "#3498db",
+    "Cloud Security / CNAPP":         "#2ecc71",
+    "Identity & Access Management":   "#9b59b6",
+    "Network Security / NDR":         "#1abc9c",
+    "AppSec / DevSecOps":             "#f39c12",
+    "OT / ICS / IoT Security":        "#e67e22",
+    "Data Security":                  "#27ae60",
+    "Threat Intelligence":            "#c0392b",
+    "Zero Trust / SASE":              "#2980b9",
+    "Managed Security / MSSP":        "#8e44ad",
+    "GRC / Risk / Compliance":        "#16a085",
+    "Security Awareness & Training":  "#d35400",
+    "API Security":                   "#f1c40f",
+    "SIEM / SOAR / XDR":             "#7f8c8d",
+    "Email Security":                 "#95a5a6",
+    "Deception":                      "#c0392b",
+    "Fraud Prevention":               "#2c3e50",
+    "PAM / Secrets":                  "#8e44ad",
+    "DSPM / Data Privacy":            "#27ae60",
+    "Vulnerability Management":       "#e74c3c",
+    "Backup / Recovery":              "#3498db",
+    "Default":                        "#7f8c8d",
+}
+
+HALL_ORDER = [
+    ("North Hall",      "N"),
+    ("South Hall",      "S"),
+    ("West Hall L1",    "WL1"),
+    ("West Hall L2",    "WL2"),
+    ("Early Stage Expo","ESE"),
+    ("Innovation Sandbox","IS"),
+]
+
+# Schematic layout parameters per hall
+# Maps booth number prefix ranges to approximate grid positions
+BOOTH_LAYOUT = {
+    "N": {"cols": 22, "rows": 14, "start": 5700, "step": 100},
+    "S": {"cols": 22, "rows": 14, "start": 600,  "step": 100},
+    "W": {"cols": 10, "rows": 12, "start": 100,  "step": 100},
+}
+
+
+# ── Load vendor data ───────────────────────────────────────────────────────────
+
+def load_vendors() -> list[dict]:
+    idx = MAPS_DIR / "booth-index.json"
+    if idx.exists():
+        return json.loads(idx.read_text())
+
+    # Fallback: build from redbooks directly
+    vendors = []
+    for rb in sorted(VENDORS_DIR.glob("*/redbook.md")):
+        slug = rb.parent.name
+        if slug == "_template":
+            continue
+        text = rb.read_text()
+
+        name_m    = re.search(r"^# (.+?) —", text, re.M)
+        booth_m   = re.search(r"\*\*Booth\*\*\s*\|\s*(.+?)\s*\|", text)
+        hall_m    = re.search(r"\*\*Hall\*\*\s*\|\s*(.+?)\s*\|", text)
+        tier_m    = re.search(r"\*\*Sponsor Tier\*\*\s*\|\s*(.+?)\s*\|", text)
+        attend_m  = re.search(r"\*\*Attendance\*\*\s*\|\s*(.+?)\s*\|", text)
+        nav_m     = re.search(r"\*\*Navigate\*\*\s*\|\s*(.+?)\s*\|", text)
+        cluster_m = re.search(r"\*\*Cluster:\*\*\s*(.+)", text)
+        visited_m = re.search(r"\*\*Status\*\*\s*\|\s*(.+?)\s*\|", text)
+        brief_lines = re.findall(r"^\d+\. (.+)$", text, re.M)
+
+        attend = attend_m.group(1).strip() if attend_m else ""
+        if "Not Attending" in attend:
+            continue
+
+        booth = booth_m.group(1).strip() if booth_m else "?"
+        if booth in ("Not Found", "—", ""):
+            booth = "?"
+
+        vendors.append({
+            "slug":    slug,
+            "name":    name_m.group(1).strip() if name_m else slug,
+            "booth":   booth,
+            "hall":    hall_m.group(1).strip()    if hall_m    else "?",
+            "tier":    tier_m.group(1).strip()    if tier_m    else "?",
+            "attend":  attend,
+            "nav":     nav_m.group(1).strip()     if nav_m     else "",
+            "cluster": cluster_m.group(1).strip() if cluster_m else "Default",
+            "visited": visited_m.group(1).strip() if visited_m else "",
+            "brief":   brief_lines[:3],
+            "redbook": f"../vendors/{slug}/redbook.md",
+            "x_pct":   None,
+            "y_pct":   None,
+        })
+
+    return vendors
+
+
+# ── Assign schematic coordinates ──────────────────────────────────────────────
+
+def assign_schematic_coords(vendors: list[dict]) -> list[dict]:
+    """
+    Assign (x_pct, y_pct) based on booth number when real coords are absent.
+    Uses a serpentine grid model matching typical trade show aisle patterns.
+    """
+    # Group by hall prefix
+    from collections import defaultdict
+    by_hall: dict[str, list] = defaultdict(list)
+
+    for v in vendors:
+        booth = v.get("booth", "?")
+        if booth == "?":
+            continue
+        # Extract prefix and number
+        m = re.match(r"([A-Z]+)-?(\d+)", booth.upper())
+        if m:
+            prefix = m.group(1)
+            number = int(m.group(2))
+            by_hall[prefix].append((number, v))
+
+    for prefix, items in by_hall.items():
+        items.sort(key=lambda x: x[0])
+        n = len(items)
+        params = BOOTH_LAYOUT.get(prefix, {"cols": 12, "rows": 10})
+        cols = params["cols"]
+
+        for i, (num, v) in enumerate(items):
+            col = i % cols
+            row = i // cols
+            total_rows = max(1, (n + cols - 1) // cols)
+
+            # 5–95% range with padding
+            x = 5 + (col / max(cols - 1, 1)) * 90
+            y = 5 + (row / max(total_rows - 1, 1)) * 90
+
+            # Serpentine: alternate row direction
+            if row % 2 == 1:
+                x = 95 - (x - 5)
+
+            v["x_pct"] = round(x, 1)
+            v["y_pct"] = round(y, 1)
+
+    # Vendors with no booth get parked at 50,50 (shown differently)
+    for v in vendors:
+        if v.get("x_pct") is None:
+            v["x_pct"] = 50.0
+            v["y_pct"] = 50.0
+            v["no_coords"] = True
+
+    return vendors
+
+
+# ── Check for hall floor plan images ──────────────────────────────────────────
+
+def get_hall_images() -> dict[str, str]:
+    """Return base64-encoded images per hall slug, if available."""
+    import base64
+    images = {}
+    slugs = {
+        "North Hall":       "north-hall",
+        "South Hall":       "south-hall",
+        "West Hall L1":     "west-hall-l1",
+        "West Hall L2":     "west-hall-l2",
+        "Early Stage Expo": "ese",
+    }
+    for hall, slug in slugs.items():
+        for ext in ("png", "jpg", "jpeg"):
+            f = MAPS_DIR / f"{slug}.{ext}"
+            if f.exists():
+                b64 = base64.b64encode(f.read_bytes()).decode()
+                images[hall] = f"data:image/{ext};base64,{b64}"
+                break
+    return images
+
+
+# ── Generate HTML ──────────────────────────────────────────────────────────────
+
+def generate_html(vendors: list[dict]) -> str:
+    hall_images = get_hall_images()
+
+    # Deduplicate cluster colours
+    clusters = sorted({v.get("cluster", "Default") for v in vendors})
+    color_js = json.dumps({c: CLUSTER_COLORS.get(c, CLUSTER_COLORS["Default"])
+                            for c in clusters})
+
+    vendors_js = json.dumps(vendors, ensure_ascii=False)
+    hall_images_js = json.dumps(hall_images)
+
+    now = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSA 2026 — CrispAI Floor Map</title>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+       background: #0f1117; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }}
+
+/* ── Header ── */
+header {{ background: #1a1f2e; border-bottom: 1px solid #2d3748; padding: 10px 16px;
+          display: flex; align-items: center; gap: 12px; flex-shrink: 0; }}
+header h1 {{ font-size: 16px; font-weight: 700; color: #63b3ed; }}
+header span {{ font-size: 12px; color: #718096; }}
+#search {{ flex: 1; max-width: 280px; padding: 6px 10px; border-radius: 6px;
+           background: #2d3748; border: 1px solid #4a5568; color: #e2e8f0; font-size: 13px; }}
+#search::placeholder {{ color: #718096; }}
+
+/* ── Hall tabs ── */
+#hall-tabs {{ display: flex; gap: 4px; flex-shrink: 0; background: #1a1f2e;
+              padding: 6px 16px; border-bottom: 1px solid #2d3748; overflow-x: auto; }}
+.tab {{ padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px;
+        background: #2d3748; color: #a0aec0; border: none; white-space: nowrap; }}
+.tab.active {{ background: #2b6cb0; color: #fff; font-weight: 600; }}
+.tab:hover:not(.active) {{ background: #4a5568; }}
+
+/* ── Main layout ── */
+#main {{ display: flex; flex: 1; overflow: hidden; }}
+
+/* ── Map area ── */
+#map-wrap {{ flex: 1; position: relative; overflow: hidden; background: #1a2035;
+             cursor: crosshair; }}
+#map-img {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: contain; opacity: 0.85; }}
+#schematic-bg {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
+#pins {{ position: absolute; top: 0; left: 0; width: 100%; height: 100%; }}
+
+.pin {{ position: absolute; transform: translate(-50%, -50%);
+        cursor: pointer; transition: transform 0.15s; z-index: 10; }}
+.pin:hover {{ transform: translate(-50%, -50%) scale(1.35); z-index: 20; }}
+.pin-dot {{ width: 12px; height: 12px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.7); box-shadow: 0 2px 6px rgba(0,0,0,0.5); }}
+.pin.selected .pin-dot {{ width: 16px; height: 16px; border-color: #fff;
+                           box-shadow: 0 0 12px rgba(255,255,255,0.8); }}
+.pin-label {{ position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+              font-size: 9px; font-weight: 700; white-space: nowrap;
+              background: rgba(0,0,0,0.75); padding: 1px 4px; border-radius: 3px;
+              pointer-events: none; display: none; }}
+.pin:hover .pin-label, .pin.selected .pin-label {{ display: block; }}
+
+/* ── Sidebar ── */
+#sidebar {{ width: 320px; flex-shrink: 0; background: #1a1f2e; overflow-y: auto;
+            border-left: 1px solid #2d3748; }}
+#vendor-count {{ font-size: 11px; color: #718096; padding: 8px 12px;
+                 border-bottom: 1px solid #2d3748; }}
+
+.vendor-card {{ padding: 12px; border-bottom: 1px solid #2d3748; cursor: pointer;
+                transition: background 0.1s; }}
+.vendor-card:hover {{ background: #2d3748; }}
+.vendor-card.selected {{ background: #2b4080; border-left: 3px solid #63b3ed; }}
+.vendor-card.hidden {{ display: none; }}
+.vc-header {{ display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }}
+.vc-dot {{ width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }}
+.vc-name {{ font-size: 13px; font-weight: 600; color: #e2e8f0; }}
+.vc-booth {{ font-size: 11px; color: #63b3ed; margin-left: auto; flex-shrink: 0;
+             background: #2d3748; padding: 1px 6px; border-radius: 10px; }}
+.vc-meta {{ font-size: 11px; color: #718096; margin-bottom: 4px; }}
+.vc-cluster {{ display: inline-block; font-size: 10px; padding: 2px 6px;
+               border-radius: 10px; margin-bottom: 6px; }}
+.vc-brief {{ font-size: 11px; color: #a0aec0; line-height: 1.5; }}
+.vc-links {{ margin-top: 8px; display: flex; gap: 6px; }}
+.vc-links a {{ font-size: 11px; padding: 3px 8px; border-radius: 4px;
+               background: #2d3748; color: #63b3ed; text-decoration: none; }}
+.vc-links a:hover {{ background: #4a5568; }}
+.visited-badge {{ font-size: 10px; margin-left: auto; }}
+
+/* ── Detail panel ── */
+#detail-panel {{ display: none; position: absolute; right: 320px; bottom: 0;
+                 width: 300px; max-height: 60vh; background: #1a1f2e;
+                 border: 1px solid #2d3748; border-radius: 8px 8px 0 0;
+                 overflow-y: auto; z-index: 100; box-shadow: -4px -4px 20px rgba(0,0,0,0.4); }}
+#detail-panel.visible {{ display: block; }}
+#dp-close {{ float: right; background: none; border: none; color: #718096;
+             cursor: pointer; font-size: 18px; padding: 8px; }}
+#dp-content {{ padding: 16px; }}
+#dp-content h2 {{ font-size: 15px; margin-bottom: 8px; color: #63b3ed; }}
+#dp-content table {{ width: 100%; font-size: 12px; border-collapse: collapse; }}
+#dp-content td {{ padding: 4px 6px; border-bottom: 1px solid #2d3748; }}
+#dp-content td:first-child {{ color: #718096; width: 90px; }}
+#dp-links {{ margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }}
+#dp-links a {{ padding: 5px 10px; background: #2b6cb0; color: #fff;
+               border-radius: 5px; text-decoration: none; font-size: 12px; }}
+
+/* ── Legend ── */
+#legend {{ position: absolute; bottom: 8px; left: 8px; background: rgba(26,31,46,0.92);
+           border: 1px solid #2d3748; border-radius: 6px; padding: 8px 10px;
+           font-size: 10px; z-index: 50; max-width: 180px; }}
+#legend-toggle {{ cursor: pointer; color: #63b3ed; font-size: 10px; margin-bottom: 4px; }}
+#legend-items {{ display: none; }}
+#legend-items.visible {{ display: block; }}
+.leg-item {{ display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }}
+.leg-dot {{ width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }}
+
+/* ── Stats bar ── */
+#stats {{ position: absolute; top: 8px; left: 8px; background: rgba(26,31,46,0.9);
+          border: 1px solid #2d3748; border-radius: 6px; padding: 5px 10px;
+          font-size: 11px; color: #a0aec0; z-index: 50; }}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🗺 RSA 2026 — CrispAI Floor Map</h1>
+  <span>Moscone Center · March 23-26 · Generated {now}</span>
+  <input id="search" type="text" placeholder="Search vendor, cluster, booth…" oninput="filterVendors(this.value)">
+</header>
+
+<div id="hall-tabs"></div>
+
+<div id="main">
+  <div id="map-wrap">
+    <img id="map-img" src="" alt="" style="display:none">
+    <svg id="schematic-bg" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="pins"></div>
+    <div id="stats"></div>
+    <div id="legend">
+      <div id="legend-toggle" onclick="toggleLegend()">🎨 Legend ▾</div>
+      <div id="legend-items"></div>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div id="vendor-count"></div>
+    <div id="vendor-list"></div>
+  </div>
+</div>
+
+<div id="detail-panel">
+  <button id="dp-close" onclick="closeDetail()">✕</button>
+  <div id="dp-content"></div>
+</div>
+
+<script>
+const VENDORS = {vendors_js};
+const CLUSTER_COLORS = {color_js};
+const HALL_IMAGES = {hall_images_js};
+
+const HALLS = ["North Hall","South Hall","West Hall L1","West Hall L2","Early Stage Expo","Innovation Sandbox"];
+
+let currentHall = null;
+let selectedVendor = null;
+let filterText = "";
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+function init() {{
+  buildHallTabs();
+  buildLegend();
+
+  // Default to first hall with vendors
+  const halls = getHallsWithVendors();
+  selectHall(halls[0] || "North Hall");
+}}
+
+function getHallsWithVendors() {{
+  const s = new Set(VENDORS.map(v => v.hall));
+  return HALLS.filter(h => s.has(h));
+}}
+
+// ── Hall tabs ─────────────────────────────────────────────────────────────────
+
+function buildHallTabs() {{
+  const hallsWithVendors = getHallsWithVendors();
+  const container = document.getElementById("hall-tabs");
+  container.innerHTML = "";
+
+  // "All" tab
+  const allTab = document.createElement("button");
+  allTab.className = "tab";
+  allTab.textContent = `All (${{VENDORS.length}})`;
+  allTab.onclick = () => selectHall("All");
+  container.appendChild(allTab);
+
+  for (const hall of hallsWithVendors) {{
+    const count = VENDORS.filter(v => v.hall === hall).length;
+    const tab = document.createElement("button");
+    tab.className = "tab";
+    tab.id = `tab-${{hall.replace(/\\s+/g,"-")}}`;
+    tab.textContent = `${{hall}} (${{count}})`;
+    tab.onclick = () => selectHall(hall);
+    container.appendChild(tab);
+  }}
+}}
+
+function selectHall(hall) {{
+  currentHall = hall;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  const id = `tab-${{hall.replace(/\\s+/g,"-")}}`;
+  const t = document.getElementById(id) || document.querySelector(".tab");
+  if (t) t.classList.add("active");
+
+  renderMap();
+  renderSidebar();
+}}
+
+// ── Map rendering ─────────────────────────────────────────────────────────────
+
+function renderMap() {{
+  const mapImg  = document.getElementById("map-img");
+  const pinsDiv = document.getElementById("pins");
+  const svgBg   = document.getElementById("schematic-bg");
+
+  // Show background image if available
+  const img = HALL_IMAGES[currentHall];
+  if (img) {{
+    mapImg.src = img;
+    mapImg.style.display = "block";
+    svgBg.innerHTML = "";
+  }} else {{
+    mapImg.style.display = "none";
+    drawSchematicGrid(svgBg);
+  }}
+
+  // Filter vendors for this hall
+  const visible = getVisibleVendors();
+  pinsDiv.innerHTML = "";
+
+  for (const v of visible) {{
+    if (v.x_pct == null) continue;
+    const pin = document.createElement("div");
+    pin.className = "pin";
+    pin.style.left = v.x_pct + "%";
+    pin.style.top  = v.y_pct + "%";
+
+    const color = CLUSTER_COLORS[v.cluster] || CLUSTER_COLORS["Default"] || "#718096";
+    const visited = v.visited && v.visited.includes("✅");
+
+    pin.innerHTML = `
+      <div class="pin-dot" style="background:${{color}};${{visited ? 'opacity:0.5' : ''}}"></div>
+      <div class="pin-label">${{v.booth}} ${{v.name.split(" ")[0]}}</div>
+    `;
+    pin.title = `${{v.name}} — ${{v.booth}}`;
+    pin.dataset.slug = v.slug;
+    pin.onclick = () => selectVendor(v.slug);
+    pinsDiv.appendChild(pin);
+  }}
+
+  updateStats(visible);
+}}
+
+function drawSchematicGrid(svg) {{
+  const w = svg.parentElement.offsetWidth || 800;
+  const h = svg.parentElement.offsetHeight || 600;
+  svg.setAttribute("viewBox", `0 0 ${{w}} ${{h}}`);
+
+  // Hall outline
+  const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+  rect.setAttribute("x","20"); rect.setAttribute("y","20");
+  rect.setAttribute("width", w-40); rect.setAttribute("height", h-40);
+  rect.setAttribute("fill","none"); rect.setAttribute("stroke","#2d3748");
+  rect.setAttribute("stroke-width","2"); rect.setAttribute("rx","4");
+  svg.appendChild(rect);
+
+  // Hall label
+  const text = document.createElementNS("http://www.w3.org/2000/svg","text");
+  text.setAttribute("x", w/2); text.setAttribute("y", 14);
+  text.setAttribute("text-anchor","middle"); text.setAttribute("fill","#4a5568");
+  text.setAttribute("font-size","12"); text.setAttribute("font-family","sans-serif");
+  text.textContent = currentHall === "All" ? "All Halls — Schematic" : `${{currentHall}} — Schematic Layout`;
+  svg.appendChild(text);
+
+  // Aisle lines (every 10%)
+  for (let pct = 20; pct <= 80; pct += 20) {{
+    const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+    const x = 20 + ((w-40) * pct/100);
+    line.setAttribute("x1", x); line.setAttribute("y1", 20);
+    line.setAttribute("x2", x); line.setAttribute("y2", h-20);
+    line.setAttribute("stroke","#2d3748"); line.setAttribute("stroke-width","0.5");
+    line.setAttribute("stroke-dasharray","4,4");
+    svg.appendChild(line);
+  }}
+}}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
+function renderSidebar() {{
+  const list = document.getElementById("vendor-list");
+  const visible = getVisibleVendors(true); // include filtered
+  list.innerHTML = "";
+
+  document.getElementById("vendor-count").textContent =
+    `${{visible.length}} vendors${{currentHall !== "All" ? " in " + currentHall : ""}}`;
+
+  for (const v of visible) {{
+    const color = CLUSTER_COLORS[v.cluster] || "#718096";
+    const visited = v.visited && v.visited.includes("✅");
+    const brief = v.brief && v.brief[0] ? v.brief[0] : "";
+
+    const card = document.createElement("div");
+    card.className = "vendor-card";
+    card.dataset.slug = v.slug;
+    card.innerHTML = `
+      <div class="vc-header">
+        <div class="vc-dot" style="background:${{color}}"></div>
+        <div class="vc-name">${{v.name}}</div>
+        <div class="vc-booth">${{v.booth}}</div>
+        ${{visited ? '<span class="visited-badge">✅</span>' : ''}}
+      </div>
+      <div class="vc-meta">${{v.hall}} ${{v.tier !== "❓ Unknown" ? "· " + v.tier : ""}}</div>
+      <div class="vc-cluster" style="background:${{color}}22;color:${{color}}">${{v.cluster}}</div>
+      ${{brief ? `<div class="vc-brief">${{brief}}</div>` : ""}}
+      <div class="vc-links">
+        <a href="${{v.redbook}}" target="_blank">📋 Redbook</a>
+        ${{v.nav && v.nav !== "—" ? `<a href="#" onclick="showNav('${{v.slug}}');return false">🗺 Navigate</a>` : ""}}
+      </div>
+    `;
+    card.onclick = (e) => {{ if (!e.target.closest("a")) selectVendor(v.slug); }};
+    list.appendChild(card);
+  }}
+}}
+
+// ── Filter ────────────────────────────────────────────────────────────────────
+
+function filterVendors(text) {{
+  filterText = text.toLowerCase();
+  renderMap();
+  renderSidebar();
+}}
+
+function getVisibleVendors(forSidebar=false) {{
+  let vendors = VENDORS;
+
+  // Hall filter (for map pins, always filter by hall; sidebar shows all if "All")
+  if (currentHall !== "All") {{
+    vendors = vendors.filter(v => v.hall === currentHall);
+  }}
+
+  // Text filter
+  if (filterText) {{
+    vendors = vendors.filter(v =>
+      v.name.toLowerCase().includes(filterText) ||
+      v.booth.toLowerCase().includes(filterText) ||
+      (v.cluster || "").toLowerCase().includes(filterText) ||
+      (v.hall || "").toLowerCase().includes(filterText)
+    );
+  }}
+
+  return vendors;
+}}
+
+// ── Vendor selection ──────────────────────────────────────────────────────────
+
+function selectVendor(slug) {{
+  selectedVendor = slug;
+
+  // Highlight pin
+  document.querySelectorAll(".pin").forEach(p => {{
+    p.classList.toggle("selected", p.dataset.slug === slug);
+  }});
+
+  // Highlight sidebar card
+  document.querySelectorAll(".vendor-card").forEach(c => {{
+    c.classList.toggle("selected", c.dataset.slug === slug);
+    if (c.dataset.slug === slug) c.scrollIntoView({{block:"nearest"}});
+  }});
+
+  const v = VENDORS.find(x => x.slug === slug);
+  if (v) showDetailPanel(v);
+}}
+
+function showDetailPanel(v) {{
+  const color = CLUSTER_COLORS[v.cluster] || "#718096";
+  const dp = document.getElementById("detail-panel");
+  const dc = document.getElementById("dp-content");
+
+  const briefHtml = v.brief && v.brief.length
+    ? "<p style='font-size:12px;color:#a0aec0;margin-top:8px'>" + v.brief.join("<br>") + "</p>"
+    : "";
+
+  dc.innerHTML = `
+    <h2>${{v.name}}</h2>
+    <div style="font-size:11px;margin-bottom:8px">
+      <span style="background:${{color}}22;color:${{color}};padding:2px 8px;border-radius:10px">${{v.cluster}}</span>
+    </div>
+    <table>
+      <tr><td>Booth</td><td><strong>${{v.booth}}</strong></td></tr>
+      <tr><td>Hall</td><td>${{v.hall}}</td></tr>
+      <tr><td>Tier</td><td>${{v.tier}}</td></tr>
+      <tr><td>Status</td><td>${{v.visited || "⬜ Not visited"}}</td></tr>
+      ${{v.nav && v.nav !== "—" ? `<tr><td>Navigate</td><td style='font-size:10px'>${{v.nav}}</td></tr>` : ""}}
+    </table>
+    ${{briefHtml}}
+    <div id="dp-links">
+      <a href="${{v.redbook}}" target="_blank">📋 Open Redbook</a>
+    </div>
+  `;
+  dp.classList.add("visible");
+}}
+
+function closeDetail() {{
+  document.getElementById("detail-panel").classList.remove("visible");
+  selectedVendor = null;
+  document.querySelectorAll(".pin").forEach(p => p.classList.remove("selected"));
+  document.querySelectorAll(".vendor-card").forEach(c => c.classList.remove("selected"));
+}}
+
+function showNav(slug) {{
+  const v = VENDORS.find(x => x.slug === slug);
+  if (v && v.nav) alert(v.name + " — Navigation:\\n\\n" + v.nav);
+}}
+
+// ── Legend ────────────────────────────────────────────────────────────────────
+
+function buildLegend() {{
+  const items = document.getElementById("legend-items");
+  for (const [cluster, color] of Object.entries(CLUSTER_COLORS)) {{
+    if (cluster === "Default") continue;
+    const count = VENDORS.filter(v => v.cluster === cluster).length;
+    if (count === 0) continue;
+    const div = document.createElement("div");
+    div.className = "leg-item";
+    div.innerHTML = `<div class="leg-dot" style="background:${{color}}"></div>
+      <span style="color:#a0aec0">${{cluster.split("/")[0].trim()}} (${{count}})</span>`;
+    items.appendChild(div);
+  }}
+}}
+
+function toggleLegend() {{
+  document.getElementById("legend-items").classList.toggle("visible");
+}}
+
+function updateStats(visible) {{
+  const confirmed = visible.filter(v => v.visited && v.visited.includes("✅")).length;
+  document.getElementById("stats").textContent =
+    `${{visible.length}} vendors · ${{confirmed}} visited`;
+}}
+
+// ── Keyboard nav ──────────────────────────────────────────────────────────────
+
+document.addEventListener("keydown", e => {{
+  if (e.key === "Escape") closeDetail();
+  if (e.key === "/" && !e.ctrlKey) {{
+    e.preventDefault();
+    document.getElementById("search").focus();
+  }}
+}});
+
+init();
+</script>
+</body>
+</html>"""
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Build-Map — generate RSA 2026 interactive floor map",
+    )
+    parser.add_argument("--open", "-o", action="store_true",
+                        help="Open map in browser after generating")
+    args = parser.parse_args()
+
+    MAPS_DIR.mkdir(parents=True, exist_ok=True)
+
+    print("Loading vendor data...")
+    vendors = load_vendors()
+    print(f"  {len(vendors)} attending vendors loaded")
+
+    print("Assigning schematic coordinates for vendors without image coords...")
+    vendors = assign_schematic_coords(vendors)
+    with_coords = sum(1 for v in vendors if v.get("x_pct") is not None and not v.get("no_coords"))
+    print(f"  {with_coords} vendors have coordinates")
+
+    hall_images = get_hall_images()
+    if hall_images:
+        print(f"  Floor plan images found: {', '.join(hall_images.keys())}")
+    else:
+        print("  No floor plan images found — using schematic layout")
+        print("  To add real maps: ./scripts/fetch-floorplan")
+
+    print("Generating HTML map...")
+    html = generate_html(vendors)
+
+    out = MAPS_DIR / "index.html"
+    out.write_text(html, encoding="utf-8")
+    print(f"\n✅ Map saved: {out}")
+    print(f"   {len(vendors)} vendor pins · {len(hall_images)} hall images")
+    print(f"\nUsage:")
+    print(f"   open {out}")
+    print(f"   ./scripts/build-map --open")
+
+    if args.open:
+        import webbrowser
+        webbrowser.open(f"file://{out.resolve()}")
+
+
+if __name__ == "__main__":
+    main()
