@@ -21,6 +21,41 @@
 
 ## Operating Manual
 
+### Python Environment Setup (Run Once Per Machine)
+
+This project uses `uv` with a `.venv` at `GOLDEN/.venv`.
+
+**Add to `~/.zshrc`** for auto-activation in any terminal (including IntelliJ):
+
+```zsh
+# alias python -> python3 (macOS has no bare 'python')
+alias python=python3
+
+# Auto-activate .venv when entering a project directory
+_auto_venv() {
+  local dir="$PWD"
+  while [[ "$dir" != "/" ]]; do
+    if [[ -f "$dir/.venv/bin/activate" ]]; then
+      if [[ "$VIRTUAL_ENV" != "$dir/.venv" ]]; then
+        source "$dir/.venv/bin/activate"
+        echo "activated: $dir/.venv"
+      fi
+      return
+    fi
+    dir="$(dirname "$dir")"
+  done
+  if [[ -n "$VIRTUAL_ENV" ]]; then deactivate; echo "deactivated venv"; fi
+}
+chpwd_functions+=(_auto_venv)
+_auto_venv   # run on shell init
+```
+
+Then reload: `source ~/.zshrc`
+
+For scripts, always prefer `uv run python ...` over invoking `python` directly — it guarantees the correct interpreter regardless of shell state.
+
+---
+
 ### Prerequisites — Run Once Before the Conference (on WiFi)
 
 ```bash
