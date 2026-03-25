@@ -1,0 +1,356 @@
+#!/usr/bin/env python3
+"""
+Fetch-Floorplan — CrispAI RSA 2026
+Downloads the RSA Conference 2026 interactive floor plan maps using Playwright.
+
+Requires a valid RSA Conference account. On first run you will be prompted
+to log in; credentials are never stored by this script.
+
+Usage:
+    ./scripts/fetch-floorplan                   # interactive login, save all halls
+    ./scripts/fetch-floorplan --screenshot map.png  # process existing screenshot
+    ./scripts/fetch-floorplan --schematic-only      # skip download, use booth data
+
+Output:
+    docs/maps/north-hall.png
+    docs/maps/south-hall.png
+    docs/maps/west-hall-l1.png
+    docs/maps/west-hall-l2.png
+    docs/maps/ese.png
+    docs/maps/booth-index.json   (booth → hall + pixel coords via Gemini Vision)
+"""
+
+import argparse
+import base64
+import json
+import os
+import sys
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+REPO_ROOT  = Path(__file__).parent.parent
+DOCS_DIR   = REPO_ROOT / "docs"
+MAPS_DIR   = DOCS_DIR / "maps"
+VENDORS_DIR = DOCS_DIR / "vendors"
+
+RSA_EXPO_URL  = "https://www.rsaconference.com/usa/expo"
+RSA_LOGIN_URL = "https://www.rsaconference.com/login"
+
+HALLS = {
+    "north-hall":    "North Hall",
+    "south-hall":    "South Hall",
+    "west-hall-l1":  "West Hall L1",
+    "west-hall-l2":  "West Hall L2",
+    "ese":           "Early Stage Expo",
+}
+
+
+# ── Env / key loader ──────────────────────────────────────────────────────────
+
+def _load_env() -> dict:
+    env: dict = {}
+    ef = REPO_ROOT / ".env"
+    if ef.exists():
+        for line in ef.read_text().splitlines():
+            line = line.strip()
+            if "=" in line and not line.startswith("#"):
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    return env
+
+_ENV = _load_env()
+
+def _key(name: str) -> str:
+    return os.environ.get(name, "") or _ENV.get(name, "")
+
+
+# ── Gemini Vision — extract booth coords from floor plan image ─────────────────
+
+def extract_coords_from_image(image_path: Path, hall_name: str) -> list[dict]:
+    """Send floor plan image to Gemini Vision and extract booth coordinates."""
+    api_key = _key("GEMINI_API_KEY") or _key("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError("No GEMINI_API_KEY found")
+
+    img_data = base64.b64encode(image_path.read_bytes()).decode()
+    ext = image_path.suffix.lower().lstrip(".")
+    mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "pdf": "application/pdf"}.get(ext, "image/png")
+
+    prompt = f"""This is a floor plan map of the {hall_name} at RSA Conference 2026, Moscone Center.
+
+Identify every visible booth number and its approximate location on the image.
+Express location as (x_pct, y_pct) — percentage from top-left corner (0,0) to bottom-right (100,100).
+
+Return ONLY a JSON array, no markdown:
+[
+  {{"booth": "N-5845", "x_pct": 42.5, "y_pct": 31.0}},
+  {{"booth": "N-6244", "x_pct": 55.0, "y_pct": 48.5}},
+  ...
+]
+
+Be as precise as possible. Include every readable booth number."""
+
+    payload = json.dumps({
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"inline_data": {"mime_type": mime, "data": img_data}},
+                {"text": prompt},
+            ]
+        }],
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 8192},
+    }).encode()
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    req = urllib.request.Request(url, data=payload,
+                                 headers={"Content-Type": "application/json"},
+                                 method="POST")
+    with urllib.request.urlopen(req, timeout=120) as r:
+        data = json.loads(r.read())
+
+    text = data["candidates"][0]["content"]["parts"][0]["text"]
+    import re
+    text = re.sub(r"```json\s*", "", text)
+    text = re.sub(r"```\s*", "", text).strip()
+    m = re.search(r"\[[\s\S]+\]", text)
+    if m:
+        return json.loads(m.group())
+    return []
+
+
+# ── Playwright fetch ───────────────────────────────────────────────────────────
+
+def fetch_with_playwright(output_dir: Path, headless: bool = False):
+    """
+    Navigate to the RSA floor plan using a browser.
+    headless=False  → opens a visible browser window so you can log in manually.
+    headless=True   → automated mode (requires session cookies to be saved first).
+    """
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    except ImportError:
+        print("Playwright not installed. Run: uv add playwright && playwright install chromium")
+        sys.exit(1)
+
+    session_file = REPO_ROOT / ".rsa-session.json"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=headless)
+
+        # Restore session if saved
+        context_opts = {}
+        if session_file.exists():
+            context_opts["storage_state"] = str(session_file)
+
+        ctx = browser.new_context(
+            **context_opts,
+            viewport={"width": 1600, "height": 900},
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        )
+        page = ctx.new_page()
+
+        print("Opening RSA Conference expo page...")
+        try:
+            page.goto(RSA_EXPO_URL, wait_until="networkidle", timeout=30_000)
+        except PWTimeout:
+            page.goto(RSA_EXPO_URL, wait_until="domcontentloaded", timeout=30_000)
+
+        # Check if we need to log in
+        if "login" in page.url.lower() or page.locator("input[type=password]").count() > 0:
+            if headless:
+                print("⚠️  Login required. Run without --headless to log in manually.")
+                print("    After login, run again with --headless to use saved session.")
+                browser.close()
+                return False
+            else:
+                print("\n" + "="*60)
+                print("LOGIN REQUIRED")
+                print("A browser window has opened. Please log in to RSA Conference.")
+                print("After logging in and the expo page loads, press ENTER here.")
+                print("="*60)
+                input()
+
+        # Save session for future headless runs
+        ctx.storage_state(path=str(session_file))
+        print(f"Session saved to {session_file}")
+
+        # Take full-page screenshot of expo/floor plan
+        print("Taking floor plan screenshot...")
+        page.screenshot(path=str(output_dir / "rsa-expo-full.png"), full_page=True)
+        print(f"  Saved: {output_dir}/rsa-expo-full.png")
+
+        # Try to navigate to specific hall views
+        hall_selectors = [
+            ("north-hall",   ["North Hall", "North", "north"]),
+            ("south-hall",   ["South Hall", "South", "south"]),
+            ("west-hall-l1", ["West Hall Level 1", "West L1", "West Hall L1"]),
+            ("west-hall-l2", ["West Hall Level 2", "West L2", "West Hall L2"]),
+            ("ese",          ["Early Stage", "ESE", "Innovation"]),
+        ]
+
+        for slug, labels in hall_selectors:
+            for label in labels:
+                try:
+                    btn = page.locator(f"text={label}").first
+                    if btn.count() > 0:
+                        btn.click()
+                        page.wait_for_load_state("networkidle", timeout=10_000)
+                        page.screenshot(path=str(output_dir / f"{slug}.png"),
+                                        full_page=False)
+                        print(f"  Saved: {slug}.png")
+                        break
+                except Exception:
+                    pass
+
+        browser.close()
+        return True
+
+
+# ── Load vendor booth data from redbooks ──────────────────────────────────────
+
+def load_booth_data() -> list[dict]:
+    """Read booth and hall from each vendor's redbook.md."""
+    import re
+    vendors = []
+    for rb in sorted(VENDORS_DIR.glob("*/redbook.md")):
+        slug = rb.parent.name
+        if slug == "_template":
+            continue
+        text = rb.read_text()
+
+        name_m   = re.search(r"^# (.+?) —", text, re.M)
+        booth_m  = re.search(r"\*\*Booth\*\*\s*\|\s*(.+?)\s*\|", text)
+        hall_m   = re.search(r"\*\*Hall\*\*\s*\|\s*(.+?)\s*\|", text)
+        attend_m = re.search(r"\*\*Attendance\*\*\s*\|\s*(.+?)\s*\|", text)
+
+        name     = name_m.group(1).strip()    if name_m    else slug
+        booth    = booth_m.group(1).strip()   if booth_m   else "?"
+        hall     = hall_m.group(1).strip()    if hall_m    else "?"
+        attend   = attend_m.group(1).strip()  if attend_m  else "?"
+
+        if "Not Attending" in attend or "Not Found" in booth:
+            continue
+
+        vendors.append({
+            "slug":     slug,
+            "name":     name,
+            "booth":    booth,
+            "hall":     hall,
+            "redbook":  f"../vendors/{slug}/redbook.md",
+            "x_pct":    None,
+            "y_pct":    None,
+        })
+
+    return vendors
+
+
+# ── Build initial booth-index.json ────────────────────────────────────────────
+
+def build_booth_index(coords_by_booth: dict = None) -> Path:
+    """Merge vendor data with optional Gemini-extracted coordinates."""
+    vendors = load_booth_data()
+    coords  = coords_by_booth or {}
+
+    for v in vendors:
+        if v["booth"] in coords:
+            v["x_pct"] = coords[v["booth"]]["x_pct"]
+            v["y_pct"] = coords[v["booth"]]["y_pct"]
+
+    out = MAPS_DIR / "booth-index.json"
+    out.write_text(json.dumps(vendors, indent=2))
+    print(f"Booth index: {len(vendors)} vendors → {out}")
+    return out
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Fetch-Floorplan — download RSA 2026 floor plan maps",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+examples:
+  ./scripts/fetch-floorplan                      # open browser, log in, save maps
+  ./scripts/fetch-floorplan --headless           # headless (requires saved session)
+  ./scripts/fetch-floorplan --screenshot north-hall.png --hall "North Hall"
+  ./scripts/fetch-floorplan --index-only         # build booth-index.json from redbooks
+        """,
+    )
+    parser.add_argument("--headless", action="store_true",
+                        help="Run browser headless (requires saved session from prior login)")
+    parser.add_argument("--screenshot", metavar="FILE",
+                        help="Process an existing floor plan screenshot with Gemini Vision")
+    parser.add_argument("--hall", default="North Hall",
+                        help="Hall name for --screenshot mode (default: 'North Hall')")
+    parser.add_argument("--index-only", action="store_true",
+                        help="Build booth-index.json from redbook data only (no download)")
+    args = parser.parse_args()
+
+    MAPS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if args.index_only:
+        build_booth_index()
+        return
+
+    if args.screenshot:
+        img = Path(args.screenshot)
+        if not img.exists():
+            print(f"File not found: {img}")
+            sys.exit(1)
+        print(f"Extracting booth coordinates from {img} ({args.hall})...")
+        coords_list = extract_coords_from_image(img, args.hall)
+        coords = {c["booth"]: c for c in coords_list}
+        print(f"  Extracted {len(coords)} booth positions")
+
+        # Save per-hall coords
+        hall_slug = args.hall.lower().replace(" ", "-").replace("/", "-")
+        coords_out = MAPS_DIR / f"{hall_slug}-coords.json"
+        coords_out.write_text(json.dumps(coords_list, indent=2))
+        print(f"  Saved: {coords_out}")
+
+        # Merge into booth index
+        existing = {}
+        idx = MAPS_DIR / "booth-index.json"
+        if idx.exists():
+            for v in json.loads(idx.read_text()):
+                existing[v["booth"]] = v
+        build_booth_index(coords)
+        return
+
+    # Full Playwright fetch
+    print(f"Fetching RSA floor plan maps {'(headless)' if args.headless else '(interactive)'}...")
+    success = fetch_with_playwright(MAPS_DIR, headless=args.headless)
+
+    if success:
+        # Process any downloaded images with Gemini Vision
+        coords = {}
+        for img_path in sorted(MAPS_DIR.glob("*.png")):
+            if img_path.name.startswith("rsa-"):
+                continue
+            hall_name = HALLS.get(img_path.stem, img_path.stem.replace("-", " ").title())
+            print(f"Extracting coordinates from {img_path.name}...")
+            try:
+                cl = extract_coords_from_image(img_path, hall_name)
+                for c in cl:
+                    coords[c["booth"]] = c
+                print(f"  {len(cl)} booths found in {hall_name}")
+            except Exception as e:
+                print(f"  Vision extraction failed: {e}")
+
+        build_booth_index(coords)
+    else:
+        # Build index from redbook data only
+        print("\nBuilding booth index from redbook data (no image coordinates)...")
+        build_booth_index()
+
+    print("\nNext steps:")
+    print("  1. If maps downloaded: ./scripts/build-map")
+    print("  2. If login needed:    ./scripts/fetch-floorplan  (interactive, no --headless)")
+    print("  3. Manual screenshot:  ./scripts/fetch-floorplan --screenshot <file> --hall 'North Hall'")
+
+
+if __name__ == "__main__":
+    main()
