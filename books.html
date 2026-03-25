@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSA 2025 — Bookstore Decision Tool</title>
+<style>
+:root {
+  --bg: #f5f6fa;
+  --surface: #ffffff;
+  --border: #e2e5ee;
+  --text: #1a1d2e;
+  --muted: #6b7280;
+  --accent: #2563eb;
+  --accent-light: #eff6ff;
+  --green: #16a34a;
+  --green-bg: #f0fdf4;
+  --yellow: #d97706;
+  --yellow-bg: #fffbeb;
+  --red: #dc2626;
+  --red-bg: #fef2f2;
+  --gray-bg: #f3f4f6;
+  --rank-gold: #f59e0b;
+  --shadow: 0 1px 3px rgba(0,0,0,.10), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+/* Layout */
+.app-header{background:#1a1d2e;color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.app-header h1{font-size:18px;font-weight:700;letter-spacing:-.2px}
+.app-header .subtitle{font-size:12px;color:#9ca3af;margin-top:2px}
+.cart-badge{background:var(--accent);color:#fff;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;border:none}
+.cart-badge:hover{background:#1d4ed8}
+/* Tabs */
+.tabs{display:flex;gap:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px}
+.tab{padding:12px 20px;font-size:14px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;transition:.15s;user-select:none}
+.tab.active{color:var(--accent);border-color:var(--accent)}
+.tab:hover:not(.active){color:var(--text)}
+/* Controls */
+.controls{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.controls input[type=text]{border:1px solid var(--border);border-radius:6px;padding:7px 12px;font-size:13px;width:220px;outline:none;transition:.15s}
+.controls input[type=text]:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.controls select{border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:13px;background:var(--surface);cursor:pointer;outline:none}
+.controls label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer}
+.controls input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent)}
+.controls .sep{width:1px;height:28px;background:var(--border)}
+.stat-pill{background:var(--gray-bg);border-radius:20px;padding:4px 12px;font-size:12px;color:var(--muted)}
+.stat-pill b{color:var(--text)}
+/* Main content */
+.tab-content{display:none;padding:20px 24px;max-width:1600px}
+.tab-content.active{display:block}
+/* Book table */
+.book-table{width:100%;border-collapse:separate;border-spacing:0 6px}
+.book-table thead th{text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;user-select:none;white-space:nowrap}
+.book-table thead th:hover{color:var(--accent)}
+.book-table thead th .sort-arrow{margin-left:4px;color:var(--accent)}
+.book-row{background:var(--surface);border-radius:8px;box-shadow:var(--shadow);transition:.15s}
+.book-row:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.book-row td{padding:12px 10px;vertical-align:top}
+.book-row td:first-child{border-radius:8px 0 0 8px}
+.book-row td:last-child{border-radius:0 8px 8px 0}
+/* Rank cell */
+.rank-cell{width:36px;text-align:center;padding-top:16px !important}
+.rank-num{font-size:18px;font-weight:700;color:var(--muted)}
+.rank-num.top3{color:var(--rank-gold)}
+.reading-order{font-size:10px;color:var(--accent);background:var(--accent-light);border-radius:10px;padding:2px 5px;margin-top:4px;display:inline-block;font-weight:600}
+/* Cover cell */
+.cover-cell{width:72px}
+.cover-wrap{width:60px;height:80px;border-radius:4px;overflow:hidden;background:var(--gray-bg);flex-shrink:0;border:1px solid var(--border)}
+.cover-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.cover-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;background:linear-gradient(135deg,#e0e7ff,#c7d2fe)}
+/* Book info cell */
+.book-info{min-width:220px;max-width:320px}
+.book-title{font-weight:700;font-size:14px;line-height:1.35;margin-bottom:3px}
+.book-author{font-size:12px;color:var(--muted);margin-bottom:4px}
+.book-meta{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.meta-tag{background:var(--gray-bg);border-radius:12px;padding:2px 8px;font-size:11px;color:var(--muted);font-weight:500}
+.cluster-tag{background:var(--accent-light);color:var(--accent)}
+/* Review cell */
+.review-cell{min-width:200px;max-width:320px}
+.review-text{font-size:13px;color:var(--text);line-height:1.5;margin-bottom:6px}
+.review-sources{display:flex;flex-wrap:wrap;gap:4px}
+.source-tag{font-size:11px;color:var(--muted);background:var(--gray-bg);border-radius:10px;padding:1px 8px}
+/* Rating cell */
+.rating-cell{width:120px;white-space:nowrap}
+.rating-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:12px}
+.rating-source{color:var(--muted);width:58px;flex-shrink:0}
+.stars{color:#f59e0b;font-size:13px}
+.rating-val{font-weight:600}
+.rating-count{color:var(--muted);font-size:11px}
+/* Score cell */
+.score-cell{width:90px;text-align:center}
+.score-circle{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:60px;height:60px;border-radius:50%;font-weight:800;font-size:22px;background:linear-gradient(135deg,#eff6ff,#dbeafe);color:var(--accent);border:2px solid #bfdbfe}
+.score-circle.score-high{background:linear-gradient(135deg,#f0fdf4,#dcfce7);color:var(--green);border-color:#86efac}
+.score-circle.score-med{background:linear-gradient(135deg,#fffbeb,#fef3c7);color:var(--yellow);border-color:#fcd34d}
+.score-circle.score-low{background:linear-gradient(135deg,#fef2f2,#fee2e2);color:var(--red);border-color:#fca5a5}
+.score-breakdown{font-size:10px;color:var(--muted);margin-top:4px;text-align:center;line-height:1.4}
+/* Decision cell */
+.decision-cell{width:90px;text-align:center}
+.decision-badge{display:inline-block;border-radius:12px;padding:4px 10px;font-size:12px;font-weight:700;letter-spacing:.3px}
+.badge-buy{background:var(--green-bg);color:var(--green);border:1px solid #86efac}
+.badge-wait{background:var(--yellow-bg);color:var(--yellow);border:1px solid #fcd34d}
+.badge-optional{background:var(--gray-bg);color:var(--muted);border:1px solid var(--border)}
+.badge-skip{background:var(--red-bg);color:var(--red);border:1px solid #fca5a5}
+.flag-warn{font-size:11px;color:var(--yellow);margin-top:4px;display:block}
+/* Action cell */
+.action-cell{width:80px;text-align:center}
+.wishlist-btn{width:36px;height:36px;border-radius:50%;border:2px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;transition:.15s;margin:0 auto 8px}
+.wishlist-btn:hover{border-color:var(--accent);background:var(--accent-light)}
+.wishlist-btn.active{border-color:#ef4444;background:#fef2f2}
+.own-btn{font-size:11px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:10px;padding:2px 8px;cursor:pointer;display:block;margin:0 auto}
+.own-btn.active{background:var(--green-bg);color:var(--green);border-color:#86efac}
+/* Cart drawer */
+.cart-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99}
+.cart-drawer{position:fixed;right:0;top:0;bottom:0;width:360px;background:var(--surface);box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:100;overflow-y:auto;transform:translateX(100%);transition:.25s}
+.cart-drawer.open{transform:none}
+.cart-overlay.open{display:block}
+.cart-header{background:#1a1d2e;color:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between}
+.cart-header h2{font-size:16px;font-weight:700}
+.cart-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1}
+.cart-item{display:flex;gap:10px;padding:12px 20px;border-bottom:1px solid var(--border);align-items:flex-start}
+.cart-item-cover{width:36px;height:48px;border-radius:3px;overflow:hidden;flex-shrink:0;background:var(--gray-bg)}
+.cart-item-cover img{width:100%;height:100%;object-fit:cover}
+.cart-item-info{flex:1;min-width:0}
+.cart-item-title{font-weight:600;font-size:13px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cart-item-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.cart-item-price{font-weight:700;font-size:13px;text-align:right;white-space:nowrap}
+.cart-remove{font-size:16px;color:var(--muted);cursor:pointer;background:none;border:none;margin-left:4px}
+.cart-remove:hover{color:var(--red)}
+.cart-footer{padding:16px 20px;border-top:2px solid var(--border);background:var(--bg);position:sticky;bottom:0}
+.cart-total{display:flex;justify-content:space-between;font-size:16px;font-weight:700;margin-bottom:8px}
+.cart-note{font-size:11px;color:var(--muted);line-height:1.4}
+.cart-empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:14px}
+/* Price tab */
+.price-table{width:100%;border-collapse:separate;border-spacing:0 6px}
+.price-table thead th{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;text-align:left;cursor:pointer}
+.price-table thead th:hover{color:var(--accent)}
+.price-row{background:var(--surface);border-radius:8px;box-shadow:var(--shadow)}
+.price-row td{padding:10px 10px;vertical-align:middle}
+.price-row td:first-child{border-radius:8px 0 0 8px}
+.price-row td:last-child{border-radius:0 8px 8px 0}
+.price-title{font-weight:600;font-size:13px;line-height:1.3;max-width:200px}
+.price-author{font-size:11px;color:var(--muted)}
+.list-price{font-weight:600;font-size:14px}
+.store-input{width:70px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:13px;font-weight:600;text-align:right}
+.store-input:focus{outline:none;border-color:var(--accent)}
+.online-link{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:500;color:var(--text);text-decoration:none;transition:.15s;white-space:nowrap}
+.online-link:hover{background:var(--accent-light);border-color:var(--accent);color:var(--accent)}
+.online-links{display:flex;flex-direction:column;gap:4px}
+.verdict-cell{min-width:140px}
+.verdict-buy-store{color:var(--green);font-weight:600;font-size:12px}
+.verdict-buy-online{color:var(--accent);font-weight:600;font-size:12px}
+.verdict-sub{color:var(--yellow);font-weight:600;font-size:12px}
+.verdict-reason{font-size:11px;color:var(--muted);margin-top:2px}
+.savings-badge{display:inline-block;font-size:11px;font-weight:600;background:var(--green-bg);color:var(--green);border-radius:10px;padding:1px 7px}
+.oreilly-tag{background:#ff6b35;color:#fff;font-size:10px;font-weight:700;border-radius:8px;padding:1px 6px;display:inline-block}
+/* Responsive */
+@media(max-width:900px){
+  .book-table{font-size:13px}
+  .tab-content{padding:12px}
+  .controls{padding:10px 12px}
+}
+/* Empty state */
+.empty-state{text-align:center;padding:60px 24px;color:var(--muted)}
+.empty-state .icon{font-size:48px;margin-bottom:12px}
+/* Tooltip for score */
+.score-tip{position:relative;cursor:help}
+.score-tip:hover .score-tooltip{display:block}
+.score-tooltip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a1d2e;color:#fff;border-radius:8px;padding:10px 14px;font-size:12px;width:160px;z-index:10;line-height:1.6;box-shadow:var(--shadow-md)}
+.score-tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1a1d2e}
+.score-tooltip-row{display:flex;justify-content:space-between;gap:10px}
+.score-tooltip-row .val{font-weight:600;color:#93c5fd}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div>
+    <h1>RSA 2025 Bookstore — Decision Tool</h1>
+    <div class="subtitle">196 photos scanned · 90+ books identified · Scored for your interest profile</div>
+  </div>
+  <button class="cart-badge" onclick="toggleCart()">
+    🛒 Wishlist (<span id="cart-count">0</span>) &nbsp;≈&nbsp; $<span id="cart-total">0</span>
+  </button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('browser',this)">📚 Book Browser</div>
+  <div class="tab" onclick="switchTab('price',this)">💰 Price Comparison</div>
+</div>
+
+<div class="controls" id="browser-controls">
+  <input type="text" id="search" placeholder="Search title, author, topic..." oninput="render()">
+  <select id="cluster-filter" onchange="render()">
+    <option value="">All Clusters</option>
+    <option value="LLM/AI">LLM / AI</option>
+    <option value="Low-Level">Low-Level / Assembly</option>
+    <option value="Crypto">Cryptography / PQC</option>
+    <option value="Infra">Infrastructure</option>
+    <option value="Cloud">Cloud / Containers</option>
+    <option value="Privacy">Privacy</option>
+    <option value="Pen-Test">Pen Testing</option>
+    <option value="General">General Security</option>
+    <option value="Narrative">Narrative / History</option>
+  </select>
+  <select id="decision-filter" onchange="render()">
+    <option value="">All Decisions</option>
+    <option value="BUY">Buy</option>
+    <option value="WAIT">Wait</option>
+    <option value="OPTIONAL">Optional</option>
+    <option value="SKIP">Skip</option>
+  </select>
+  <div class="sep"></div>
+  <label><input type="checkbox" id="hide-owned" onchange="render()"> Hide owned</label>
+  <label><input type="checkbox" id="only-wishlist" onchange="render()"> Wishlist only</label>
+  <div class="sep"></div>
+  <span class="stat-pill"><b id="showing-count">0</b> books shown</span>
+</div>
+
+<div class="controls" id="price-controls" style="display:none">
+  <span style="font-size:13px;color:var(--muted);">Enter store price to compare. Savings vs. Amazon estimated at <b>30–40%</b> off list.</span>
+  <div class="sep"></div>
+  <label><input type="checkbox" id="price-wishlist-only" onchange="renderPrice()"> Wishlist only</label>
+</div>
+
+<!-- Browser tab -->
+<div class="tab-content active" id="tab-browser">
+  <table class="book-table">
+    <thead>
+      <tr>
+        <th style="width:40px" onclick="sortBy('rank')">Rank<span class="sort-arrow" id="arrow-rank">↑</span></th>
+        <th style="width:70px">Cover</th>
+        <th onclick="sortBy('title')">Book</th>
+        <th onclick="sortBy('cluster')">Cluster</th>
+        <th onclick="sortBy('score')" style="text-align:center">Score<span class="sort-arrow" id="arrow-score"></span></th>
+        <th>Ratings</th>
+        <th>Review</th>
+        <th onclick="sortBy('decision')" style="text-align:center">Decision<span class="sort-arrow" id="arrow-decision"></span></th>
+        <th style="text-align:center">Cart</th>
+      </tr>
+    </thead>
+    <tbody id="book-tbody"></tbody>
+  </table>
+  <div class="empty-state" id="empty-state" style="display:none">
+    <div class="icon">📭</div>
+    <div>No books match your filters.</div>
+  </div>
+</div>
+
+<!-- Price tab -->
+<div class="tab-content" id="tab-price">
+  <table class="price-table">
+    <thead>
+      <tr>
+        <th onclick="sortPriceBy('rank')">Rank</th>
+        <th>Title</th>
+        <th onclick="sortPriceBy('score')" style="text-align:center">Score</th>
+        <th>List Price</th>
+        <th>Store Price <span style="font-weight:400;font-size:11px">(type here)</span></th>
+        <th>Buy Online</th>
+        <th>Verdict</th>
+      </tr>
+    </thead>
+    <tbody id="price-tbody"></tbody>
+  </table>
+</div>
+
+<!-- Cart drawer -->
+<div class="cart-overlay" id="cart-overlay" onclick="toggleCart()"></div>
+<div class="cart-drawer" id="cart-drawer">
+  <div class="cart-header">
+    <h2>🛒 My Wishlist</h2>
+    <button class="cart-close" onclick="toggleCart()">✕</button>
+  </div>
+  <div id="cart-items"></div>
+  <div class="cart-footer">
+    <div class="cart-total"><span>Estimated Total (List)</span><span>$<span id="cart-total-drawer">0</span></span></div>
+    <div class="cart-note">Amazon prices typically 30–40% below list. O'Reilly subscription titles may be free with your plan ($19.99/mo).</div>
+  </div>
+</div>
+
+<script>
+/* ───────── DATA ───────── */
+const books = [
+  {
+    rank:1, isbn13:"9781119745303",
+    title:"Blue Fox: Arm Assembly Internals and Reverse Engineering",
+    author:"Maria Markstedter", publisher:"Wiley", year:2023,
+    cluster:"Low-Level", score:96,
+    breakdown:{relevance:40,community:29,recency:12,depth:15},
+    grRating:4.53, grCount:36, amzRating:4.7, amzCount:191,
+    decision:"BUY", flag:null, listPrice:64.99, oreilly:false,
+    readingOrder:2,
+    review:"The definitive ARM reverse engineering reference by 'Azeria' (founder of Azeria Labs). Covers AArch32/AArch64 instruction sets, calling conventions, heap/stack internals, and exploitation — essential for firmware, edge device security, and IoT/robotics. Reviewers with decades of RE say they 'learned so much.'",
+    sources:["Goodreads 4.53 (36 ratings)","Amazon 4.7 (191 reviews)","Black Hat curriculum"]
+  },
+  {
+    rank:2, isbn13:"9781718503847",
+    title:"Serious Cryptography, 2nd Edition",
+    author:"Jean-Philippe Aumasson", publisher:"No Starch Press", year:2024,
+    cluster:"Crypto", score:93,
+    breakdown:{relevance:38,community:25,recency:15,depth:15},
+    grRating:4.29, grCount:380, amzRating:4.6, amzCount:null,
+    decision:"BUY", flag:null, listPrice:49.99, oreilly:false,
+    readingOrder:1,
+    review:"Aumasson (co-designer of BLAKE2/BLAKE3) bridges academic rigor and practitioner need better than any other single-volume crypto text. 2nd ed adds CRYSTALS-Kyber/Dilithium (PQC) and cryptocurrency cryptography. Infosecurity Mag: 'a must read for anyone wanting to enter cryptographic engineering.'",
+    sources:["Goodreads 4.29 (380 ratings)","Amazon 4.6","Infosecurity Magazine","HN crypto consensus"]
+  },
+  {
+    rank:3, isbn13:"9781718503267",
+    title:"Evasive Malware: A Field Guide to Detecting, Analyzing, and Defeating Advanced Threats",
+    author:"Kyle Cucci", publisher:"No Starch Press", year:2024,
+    cluster:"Low-Level", score:91,
+    breakdown:{relevance:34,community:27,recency:15,depth:15},
+    grRating:4.47, grCount:15, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:49.99, oreilly:false,
+    readingOrder:4,
+    review:"First book dedicated entirely to anti-analysis and evasion in Windows malware — anti-debugging, environment detection, process injection, API unhooking, packing, and timing attacks. Expert reviewers call it 'a friendly and up-to-date compendium' that is accessible yet deeply technical.",
+    sources:["Goodreads 4.47 (15 ratings, strong signal)","No Starch quality assurance"]
+  },
+  {
+    rank:4, isbn13:"9781098162207",
+    title:"The Developer's Playbook for Large Language Model Security",
+    author:"Steve Wilson", publisher:"O'Reilly", year:2024,
+    cluster:"LLM/AI", score:89,
+    breakdown:{relevance:40,community:20,recency:15,depth:14},
+    grRating:3.81, grCount:36, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:59.99, oreilly:true,
+    readingOrder:6,
+    review:"First comprehensive treatment of LLM-specific attack surfaces: prompt injection, jailbreaks, RAG manipulation, training data poisoning, model supply chain risks. Organized around OWASP Top 10 for LLMs. Field evolves fast — supplement with #5.",
+    sources:["Goodreads 3.81 (36 ratings)","OWASP LLM Top 10 aligned","O'Reilly subscription available"]
+  },
+  {
+    rank:5, isbn13:"9781836203759",
+    title:"AI-Native LLM Security",
+    author:"Vaibhav Malik, Ken Huang, Ads Dawson", publisher:"Packt", year:2025,
+    cluster:"LLM/AI", score:82,
+    breakdown:{relevance:38,community:15,recency:15,depth:14},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:44.99, oreilly:false,
+    readingOrder:7,
+    review:"Covers agentic LLM threats, multi-agent pipelines, tool-use exploitation, memory poisoning, and model supply chain. Infrastructure-focused with emphasis on runtime defenses, MLSecOps, and monitoring for production AI. OWASP LLM Top 10 contributor authors. Complements the O'Reilly playbook.",
+    sources:["OWASP LLM Top 10 contributor authors","Practical DevSecOps top AI security books 2026"]
+  },
+  {
+    rank:6, isbn13:"9780443137372",
+    title:"Industrial Network Security, 3rd Edition",
+    author:"Eric D. Knapp", publisher:"Syngress/Elsevier", year:2024,
+    cluster:"Infra", score:82,
+    breakdown:{relevance:35,community:18,recency:15,depth:14},
+    grRating:3.72, grCount:47, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:89.95, oreilly:false,
+    readingOrder:8,
+    review:"Go-to reference for OT/ICS, SCADA, and smart grid security. 3rd ed adds Pipedream/Industroyer2 case studies, OT Cyber Kill Chain, updated SIEM coverage, and new IR chapter. Robert Lee (Dragos): 'a true expert... accurate and useful in a field plagued by misinformation.'",
+    sources:["Goodreads 3.72 (47 ratings)","IEEE: 'worth recommendation'","Robert Lee (Dragos) endorsement"]
+  },
+  {
+    rank:7, isbn13:"9781950508402",
+    title:"The DevOps Handbook, 2nd Edition",
+    author:"Gene Kim, Jez Humble, Patrick Debois, John Willis, Nicole Forsgren", publisher:"IT Revolution", year:2021,
+    cluster:"Infra", score:81,
+    breakdown:{relevance:30,community:29,recency:8,depth:14},
+    grRating:4.29, grCount:5914, amzRating:4.7, amzCount:null,
+    decision:"BUY", flag:null, listPrice:49.95, oreilly:false,
+    readingOrder:null,
+    review:"Definitive industry classic translating DevOps principles into actionable security culture change. 2nd ed adds 15 new case studies (Adidas, US Air Force) and 100+ pages. Consistently top-cited on HN and Reddit r/devops. Cyber Canon inductee.",
+    sources:["Goodreads 4.29 (5,914 ratings)","Amazon 4.7","Cyber Canon inductee","HN/Reddit consensus"]
+  },
+  {
+    rank:8, isbn13:"9781394374328",
+    title:"Becoming Quantum Safe",
+    author:"Jai Singh Arun, Ray Harishankar, Walid Rjaibi", publisher:"Wiley", year:2025,
+    cluster:"Crypto", score:80,
+    breakdown:{relevance:37,community:15,recency:15,depth:13},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:64.99, oreilly:false,
+    readingOrder:9,
+    review:"Written by IBM Research scientists who led IBM's quantum-safe program and contributed to NIST PQC standardization. Covers CRYSTALS-Kyber, Dilithium, SPHINCS+, and crypto-agility migration strategy. Foreword by Whitfield Diffie. More strategic than Serious Cryptography; buy both.",
+    sources:["IBM Quantum Safe team authors","Foreword by Whitfield Diffie","NIST PQC contributors"]
+  },
+  {
+    rank:9, isbn13:"9781593272906",
+    title:"Practical Malware Analysis",
+    author:"Michael Sikorski, Andrew Honig", publisher:"No Starch Press", year:2012,
+    cluster:"Low-Level", score:80,
+    breakdown:{relevance:34,community:29,recency:2,depth:15},
+    grRating:4.47, grCount:611, amzRating:4.7, amzCount:null,
+    decision:"BUY", flag:null, listPrice:49.99, oreilly:false,
+    readingOrder:3,
+    review:"Highest confirmed Goodreads rating in the entire inventory. Community's #1 recommended starting point for malware RE — taught at Black Hat, FBI, and graduate programs. Covers IDA Pro, OllyDbg, Windows internals, anti-analysis, and network malware. Old but nothing has surpassed it.",
+    sources:["Goodreads 4.47 (611 ratings)","Amazon ~4.7","Cyber Canon inductee","Black Hat / FBI curriculum"]
+  },
+  {
+    rank:10, isbn13:"9781041166696",
+    title:"Quantum Ready: The Enterprise Guide to Post-Quantum Cryptographic Readiness",
+    author:"Walt Powell", publisher:"CRC Press/Routledge", year:2026,
+    cluster:"Crypto", score:78,
+    breakdown:{relevance:36,community:15,recency:15,depth:12},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:79.99, oreilly:false,
+    readingOrder:10,
+    review:"Introduces the Q-Ready Framework (five phases: Discover → Prioritize → Migrate → Validate → Sustain) for enterprise PQC migration. Powell (Field CISO, CDW Global Security Strategy) writes for enterprise architects and CISOs. Buy this if you need to present a PQC migration plan to leadership.",
+    sources:["Quantum Zeitgeist recommended","Field CISO author (CDW)"]
+  },
+  {
+    rank:11, isbn13:"9781593278595",
+    title:"Malware Data Science: Attack Detection and Attribution",
+    author:"Joshua Saxe, Hillary Sanders", publisher:"No Starch Press", year:2018,
+    cluster:"LLM/AI", score:78,
+    breakdown:{relevance:37,community:21,recency:5,depth:15},
+    grRating:3.90, grCount:52, amzRating:4.2, amzCount:null,
+    decision:"BUY", flag:null, listPrice:49.99, oreilly:false,
+    readingOrder:5,
+    review:"Pioneered applying ML (random forests, neural nets) to malware detection, clustering, and attribution at scale. Covers PE binary feature extraction, graph-based malware analysis, and building ML pipelines for threat intel. RSA Conference: 'a superb reference for those wanting to become security data scientists.'",
+    sources:["Goodreads 3.90 (52 ratings)","Amazon ~4.2","RSA Conference recommended","Sophos cited"]
+  },
+  {
+    rank:12, isbn13:"9781098113827",
+    title:"Security Chaos Engineering",
+    author:"Kelly Shortridge, Aaron Rinehart", publisher:"O'Reilly", year:2023,
+    cluster:"Infra", score:78,
+    breakdown:{relevance:30,community:22,recency:12,depth:14},
+    grRating:4.06, grCount:32, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:59.99, oreilly:true,
+    readingOrder:null,
+    review:"Called 'the InfoSec world's Ninety-five Theses' — a sweeping challenge to compliance-theater security in favor of resilience-first design. Shortridge argues security teams should be platform engineers, not gatekeepers. Case studies from Capital One and Cardinal Health.",
+    sources:["Goodreads 4.06 (32 ratings)","O'Reilly subscription available","Industry widely cited"]
+  },
+  {
+    rank:13, isbn13:"9781098133702",
+    title:"Software Supply Chain Security",
+    author:"Cassie Crossley", publisher:"O'Reilly", year:2024,
+    cluster:"Infra", score:78,
+    breakdown:{relevance:30,community:20,recency:15,depth:13},
+    grRating:3.86, grCount:7, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:59.99, oreilly:true,
+    readingOrder:null,
+    review:"Comprehensive guide to securing firmware, hardware, and software supply chains — SBOMs, SLSA, Sigstore, VEX, and dependency management. Crossley (VP Security Architecture, Schneider Electric) brings industrial supply chain credibility. Relevant to ML model supply chains.",
+    sources:["Goodreads 3.86 (7 ratings)","O'Reilly subscription available","Author VP at Schneider Electric"]
+  },
+  {
+    rank:14, isbn13:"9781492097747",
+    title:"Hands-On Differential Privacy",
+    author:"Ethan Cowan, Michael Shoemate, Mayana Pereira", publisher:"O'Reilly", year:2024,
+    cluster:"Privacy", score:76,
+    breakdown:{relevance:32,community:15,recency:15,depth:14},
+    grRating:5.0, grCount:1, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:59.99, oreilly:true,
+    readingOrder:null,
+    review:"Only book-length treatment of the OpenDP library and differential privacy in practice. Written by Harvard/Microsoft OpenDP team. Covers ε-DP, Laplace/Gaussian mechanisms, and privacy-preserving data pipelines. Bridges data pipeline and HIPAA-adjacent medical data interests.",
+    sources:["Harvard/Microsoft OpenDP team authors","O'Reilly subscription available"]
+  },
+  {
+    rank:15, isbn13:"9781098127244",
+    title:"Defensive Security Handbook, 2nd Edition",
+    author:"Lee Brotherston, Amanda Berlin, William F. Reyor III", publisher:"O'Reilly", year:2024,
+    cluster:"General", score:76,
+    breakdown:{relevance:27,community:22,recency:15,depth:12},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:69.99, oreilly:true,
+    readingOrder:null,
+    review:"Broad practitioner reference covering network security, hardening, logging, incident response, and infrastructure defense. 2nd edition modernized for cloud/hybrid environments. Good desk reference for on-prem datacenter teams.",
+    sources:["O'Reilly subscription available","Well-regarded practitioner reference"]
+  },
+  {
+    rank:16, isbn13:"9781394169795",
+    title:"The DevSecOps Playbook",
+    author:"Sean D. Mack", publisher:"Wiley", year:2023,
+    cluster:"Infra", score:74,
+    breakdown:{relevance:22,community:22,recency:12,depth:18},
+    grRating:4.0, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:64.99, oreilly:false,
+    readingOrder:null,
+    review:"DevSecOps for enterprise; covers pipeline + security integration. Relevant to on-prem datacenter operations and CI/CD security hardening. Goodreads 4.0/5.",
+    sources:["Goodreads 4.00/5","Wiley enterprise imprint"]
+  },
+  {
+    rank:17, isbn13:"9780138268459",
+    title:"Beyond the Algorithm",
+    author:"Omar Santos, Petros Radanliev", publisher:"Addison-Wesley", year:2024,
+    cluster:"LLM/AI", score:74,
+    breakdown:{relevance:30,community:22,recency:15,depth:7},
+    grRating:4.0, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:59.99, oreilly:false,
+    readingOrder:null,
+    review:"AI+cybersecurity intersection; threat intelligence and ML-driven defense from Omar Santos (Cisco Talos). Covers how AI changes the attacker/defender dynamic at the strategic and tactical level.",
+    sources:["Goodreads 4.00/5","Omar Santos (Cisco Talos) author"]
+  },
+  {
+    rank:18, isbn13:"9781718504288",
+    title:"Practical Purple Teaming",
+    author:"Alfie Champion", publisher:"No Starch Press", year:2025,
+    cluster:"Pen-Test", score:74,
+    breakdown:{relevance:27,community:18,recency:15,depth:14},
+    grRating:null, grCount:4, amzRating:null, amzCount:null,
+    decision:"WAIT", flag:"⚠️ Pre-release reviews: 50% 2-star, 25% 1-star. Wait for post-release feedback.",
+    listPrice:49.99, oreilly:false,
+    readingOrder:null,
+    review:"First dedicated book on collaborative red/blue team methodology. Covers adversary simulation, detection engineering, and closed-loop testing. Useful for security operations on large on-prem infrastructure.",
+    sources:["No Starch Press quality","⚠️ Pre-release 50% 2-star reviews on Goodreads"]
+  },
+  {
+    rank:19, isbn13:"9780138293697",
+    title:"The AI Revolution in Networking, Cybersecurity & Emerging Tech",
+    author:"Omar Santos, Salam, Dahir", publisher:"Cisco Press", year:2024,
+    cluster:"LLM/AI", score:73,
+    breakdown:{relevance:35,community:15,recency:15,depth:8},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:59.99, oreilly:false,
+    readingOrder:null,
+    review:"AI-native network security architecture directly relevant to ML+infra. Covers how AI changes threat detection, network analysis, and security operations. Cisco Press / Omar Santos (Cisco Talos) authorship.",
+    sources:["Omar Santos (Cisco Talos)","Cisco Press"]
+  },
+  {
+    rank:20, isbn13:"9781041171676",
+    title:"Transforming Cybersecurity with Machine Learning",
+    author:"Thakur, Pathan", publisher:"Routledge", year:2025,
+    cluster:"LLM/AI", score:73,
+    breakdown:{relevance:33,community:15,recency:15,depth:10},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:74.99, oreilly:false,
+    readingOrder:null,
+    review:"ML pipeline integration with security detection and response systems. Covers anomaly detection, threat hunting with ML, and integrating AI into existing SOC workflows. Practical orientation.",
+    sources:["Routledge 2025","Technical depth focus"]
+  },
+  {
+    rank:21, isbn13:"9781637429327",
+    title:"Identity Security in the AI Era",
+    author:"Gupta, Mittal", publisher:"Wiley", year:2026,
+    cluster:"LLM/AI", score:73,
+    breakdown:{relevance:33,community:15,recency:15,depth:10},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:"Pre-release title (2026). Confirm availability at store.", listPrice:54.99, oreilly:false,
+    readingOrder:null,
+    review:"AI-driven identity threats; covers MFA bypass, deepfake-based authentication attacks, and identity fabric security in the age of generative AI. Pre-release in 2026 — confirm store has it.",
+    sources:["Wiley 2026 pre-release","AI/identity security intersection"]
+  },
+  {
+    rank:22, isbn13:"9781718501126",
+    title:"Black Hat Python, 2nd Edition",
+    author:"Justin Seitz, Tim Arnold", publisher:"No Starch Press", year:2021,
+    cluster:"Low-Level", score:72,
+    breakdown:{relevance:28,community:23,recency:8,depth:13},
+    grRating:4.11, grCount:618, amzRating:4.9, amzCount:null,
+    decision:"BUY", flag:null, listPrice:49.99, oreilly:false,
+    readingOrder:null,
+    review:"100,000+ copies sold. Fully Python 3 updated. Covers network sniffers, trojaning, GitHub C2, and browser exploitation — practical tool-building for offensive research. Excellent for automating security tasks alongside assembler/low-level work.",
+    sources:["Goodreads 4.11 (618 ratings)","Amazon ~4.9","100k+ copies sold"]
+  },
+  {
+    rank:23, isbn13:"9781119892304",
+    title:"How to Measure Anything in Cybersecurity Risk, 2nd Edition",
+    author:"Douglas Hubbard, Richard Seiersen", publisher:"Wiley", year:2023,
+    cluster:"General", score:72,
+    breakdown:{relevance:25,community:22,recency:12,depth:13},
+    grRating:4.06, grCount:381, amzRating:4.5, amzCount:null,
+    decision:"BUY", flag:null, listPrice:64.99, oreilly:false,
+    readingOrder:null,
+    review:"Cyber Canon inductee. Systematically replaces heat maps and qualitative risk matrices with Bayesian calibration, Monte Carlo simulation, and FAIR-compatible quantification. Patrick Heim (Dropbox): 'a refreshing voice of reason.'",
+    sources:["Goodreads 4.06 (381 ratings)","Amazon ~4.5","Cyber Canon inductee","Patrick Heim (Dropbox)"]
+  },
+  {
+    rank:24, isbn13:"9781098157777",
+    title:"Security Architecture for Hybrid Cloud",
+    author:"Mark Buckwell, Stefaan Van daele, Carsten Horst", publisher:"O'Reilly", year:2024,
+    cluster:"Cloud", score:75,
+    breakdown:{relevance:27,community:20,recency:15,depth:13},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:69.99, oreilly:true,
+    readingOrder:null,
+    review:"Practical method for designing zero trust security across hybrid on-prem/cloud environments. Relevant for teams managing large customer datacenter deployments with cloud extensions.",
+    sources:["O'Reilly subscription available"]
+  },
+  {
+    rank:25, isbn13:"9781718502987",
+    title:"Metasploit, 2nd Edition",
+    author:"Kennedy, Aharoni, Kearns, O'Gorman, Graham", publisher:"No Starch Press", year:2025,
+    cluster:"Pen-Test", score:75,
+    breakdown:{relevance:22,community:25,recency:15,depth:13},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:49.99, oreilly:false,
+    readingOrder:null,
+    review:"The definitive Metasploit guide, fully updated for modern environments. Essential if your team runs internal red team exercises or penetration tests on large infrastructure. 1st edition is a legend; 2nd is fully modernized.",
+    sources:["No Starch Press","1st edition community legend"]
+  },
+  {
+    rank:26, isbn13:"9781098141707",
+    title:"Cloud Native Application Protection Platforms (CNAPP)",
+    author:"Miles, Giguere, Smith", publisher:"O'Reilly", year:2024,
+    cluster:"Cloud", score:71,
+    breakdown:{relevance:24,community:15,recency:15,depth:17},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:59.99, oreilly:true,
+    readingOrder:null,
+    review:"CNAPP architecture, workload protection, and container runtime security. Practical guide to unified cloud security posture management (CSPM) and cloud workload protection platforms (CWPP).",
+    sources:["O'Reilly subscription available","Cloud native focus"]
+  },
+  {
+    rank:27, isbn13:"9781968433017",
+    title:"Data Security in the Age of AI",
+    author:"Anand Singh", publisher:"Independent", year:2025,
+    cluster:"LLM/AI", score:70,
+    breakdown:{relevance:28,community:15,recency:15,depth:12},
+    grRating:5.0, grCount:1, amzRating:null, amzCount:null,
+    decision:"BUY", flag:null, listPrice:49.99, oreilly:false,
+    readingOrder:null,
+    review:"Data governance and security for ML pipelines; HIPAA-adjacent for AI-processed health data. Covers data classification, access controls, and compliance in AI-driven data environments.",
+    sources:["2025 release","Health data / HIPAA relevant"]
+  },
+  {
+    rank:28, isbn13:"9781718503748",
+    title:"Black Hat Bash",
+    author:"Nick Aleks, Dolev Farhi", publisher:"No Starch Press", year:2024,
+    cluster:"Low-Level", score:69,
+    breakdown:{relevance:22,community:20,recency:15,depth:12},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"OPTIONAL", flag:null, listPrice:49.99, oreilly:false,
+    readingOrder:null,
+    review:"Practical scripting for hacking — network scanning, lateral movement, C2, and post-exploitation in pure Bash. Lightweight complement to Black Hat Python for automation on Linux/Unix systems.",
+    sources:["No Starch Press 2024"]
+  },
+  {
+    rank:29, isbn13:"9780316595643",
+    title:"If Anyone Builds It, Everyone Dies",
+    author:"Eliezer Yudkowsky, Nate Soares", publisher:"Little, Brown", year:2025,
+    cluster:"LLM/AI", score:69,
+    breakdown:{relevance:25,community:22,recency:15,depth:7},
+    grRating:3.97, grCount:null, amzRating:null, amzCount:null,
+    decision:"OPTIONAL", flag:null, listPrice:32.00, oreilly:false,
+    readingOrder:null,
+    review:"AI existential risk argument from Yudkowsky/Soares (MIRI). Directly relevant to LLM/AGI safety considerations. Not technical — strategic and philosophical argument for AI risk. High signal for anyone thinking about AGI safety.",
+    sources:["Goodreads 3.97","Yudkowsky/Soares (MIRI)"]
+  },
+  {
+    rank:30, isbn13:"9781394173082",
+    title:"Cybersecurity First Principles",
+    author:"Rick Howard", publisher:"Wiley", year:2023,
+    cluster:"General", score:69,
+    breakdown:{relevance:20,community:27,recency:12,depth:10},
+    grRating:4.42, grCount:115, amzRating:null, amzCount:null,
+    decision:"OPTIONAL", flag:null, listPrice:54.99, oreilly:false,
+    readingOrder:null,
+    review:"Surprisingly high community rating. Strategic framework for zero-trust, resilience, and kill chain defense. Rick Howard (CSO at CyberWire) distills the foundational principles all security practitioners should internalize.",
+    sources:["Goodreads 4.42 (115 ratings)","Rick Howard (CSO, CyberWire)"]
+  },
+  {
+    rank:31, isbn13:"9781098165086",
+    title:"Attack Surface Management",
+    author:"Ron Eddings, MJ Kaufmann", publisher:"O'Reilly", year:2025,
+    cluster:"Pen-Test", score:69,
+    breakdown:{relevance:24,community:18,recency:15,depth:12},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"OPTIONAL", flag:null, listPrice:59.99, oreilly:true,
+    readingOrder:null,
+    review:"Continuous asset discovery, vulnerability exposure tracking, and EASM across complex environments. Relevant for large on-prem deployments with sprawling attack surfaces.",
+    sources:["O'Reilly subscription available","2025 release"]
+  },
+  {
+    rank:32, isbn13:"9781394333738",
+    title:"Securing Cloud Containers",
+    author:"Manavi, Kudrati, Zali", publisher:"Wiley", year:2025,
+    cluster:"Cloud", score:67,
+    breakdown:{relevance:22,community:15,recency:15,depth:15},
+    grRating:null, grCount:null, amzRating:5.0, amzCount:null,
+    decision:"OPTIONAL", flag:"If heavy container/K8s work", listPrice:64.99, oreilly:false,
+    readingOrder:null,
+    review:"Container runtime threats, Kubernetes hardening, supply chain security in containers. Relevant if you do significant container orchestration work on your on-prem deployments.",
+    sources:["Amazon 5.0 (new, few ratings)","Wiley 2025"]
+  },
+  {
+    rank:33, isbn13:"9781119627112",
+    title:"Zero Trust Security",
+    author:"Jason Garbis, Jerry W. Chapman", publisher:"Wiley", year:2021,
+    cluster:"Cloud", score:67,
+    breakdown:{relevance:20,community:22,recency:5,depth:20},
+    grRating:4.09, grCount:33, amzRating:null, amzCount:null,
+    decision:"OPTIONAL", flag:"If ZT rollout in progress", listPrice:59.99, oreilly:false,
+    readingOrder:null,
+    review:"Solid enterprise zero trust guide covering strategy, architecture, and implementation patterns. 2021 vintage but the foundational ZT framework principles remain applicable.",
+    sources:["Goodreads 4.09 (33 ratings)","Enterprise ZT reference"]
+  },
+  {
+    rank:34, isbn13:"9781593277031",
+    title:"The Car Hacker's Handbook",
+    author:"Craig Smith", publisher:"No Starch Press", year:2016,
+    cluster:"Low-Level", score:67,
+    breakdown:{relevance:26,community:24,recency:2,depth:15},
+    grRating:3.95, grCount:null, amzRating:null, amzCount:null,
+    decision:"OPTIONAL", flag:"If automotive/embedded work", listPrice:49.99, oreilly:false,
+    readingOrder:null,
+    review:"Definitive guide to CAN bus hacking, OBD-II exploitation, and automotive firmware analysis. Old but nothing has replaced it. Relevant to edge/robotics work involving vehicle communication protocols.",
+    sources:["Goodreads 3.95","Community classic; nothing has replaced it"]
+  },
+  {
+    rank:35, isbn13:"9781718502147",
+    title:"The Art of Cyberwarfare",
+    author:"Jon DiMaggio", publisher:"No Starch Press", year:2022,
+    cluster:"General", score:67,
+    breakdown:{relevance:24,community:22,recency:8,depth:13},
+    grRating:4.1, grCount:null, amzRating:null, amzCount:null,
+    decision:"OPTIONAL", flag:null, listPrice:44.99, oreilly:false,
+    readingOrder:null,
+    review:"Investigator's guide to APT espionage, ransomware, and organized cybercrime — case studies from Lazarus Group, REvil, and others. DiMaggio (Analyst1) brings firsthand threat intelligence experience.",
+    sources:["Goodreads ~4.1","Jon DiMaggio (Analyst1) author"]
+  },
+  {
+    rank:36, isbn13:"9781635576054",
+    title:"This Is How They Tell Me the World Ends",
+    author:"Nicole Perlroth", publisher:"Bloomsbury", year:2021,
+    cluster:"Narrative", score:65,
+    breakdown:{relevance:22,community:25,recency:8,depth:10},
+    grRating:null, grCount:null, amzRating:null, amzCount:null,
+    decision:"OPTIONAL", flag:"Buy online; not urgent at RSA prices", listPrice:30.00, oreilly:false,
+    readingOrder:null,
+    review:"Pulitzer-nominated investigative work on the zero-day exploit market and global cyberweapons arms race. NYT bestseller. Essential context on the geopolitical and governmental dimensions of offensive tooling.",
+    sources:["NYT Bestseller","Pulitzer Prize nominated"]
+  },
+];
+
+/* ───────── STATE ───────── */
+let sortKey = 'rank';
+let sortDir = 1; // 1=asc, -1=desc
+let priceSortKey = 'rank';
+let priceSortDir = 1;
+let wishlist = new Set();
+let owned = new Set();
+let storePrices = {};
+
+/* ───────── SORT ───────── */
+function sortBy(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = key === 'score' ? -1 : 1; }
+  document.querySelectorAll('.sort-arrow').forEach(el => el.textContent = '');
+  const arrow = document.getElementById('arrow-' + key);
+  if (arrow) arrow.textContent = sortDir === 1 ? ' ↑' : ' ↓';
+  render();
+}
+function sortPriceBy(key) {
+  if (priceSortKey === key) priceSortDir *= -1;
+  else { priceSortKey = key; priceSortDir = key === 'score' ? -1 : 1; }
+  renderPrice();
+}
+
+/* ───────── FILTER ───────── */
+function getFiltered() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const cluster = document.getElementById('cluster-filter').value;
+  const decision = document.getElementById('decision-filter').value;
+  const hideOwned = document.getElementById('hide-owned').checked;
+  const onlyWishlist = document.getElementById('only-wishlist').checked;
+  return books.filter(b => {
+    if (q && !b.title.toLowerCase().includes(q) && !b.author.toLowerCase().includes(q) && !b.review.toLowerCase().includes(q)) return false;
+    if (cluster && b.cluster !== cluster) return false;
+    if (decision && b.decision !== decision) return false;
+    if (hideOwned && owned.has(b.isbn13)) return false;
+    if (onlyWishlist && !wishlist.has(b.isbn13)) return false;
+    return true;
+  });
+}
+
+function getSorted(list, key, dir) {
+  return [...list].sort((a, b) => {
+    let av = a[key], bv = b[key];
+    if (av == null) av = dir > 0 ? Infinity : -Infinity;
+    if (bv == null) bv = dir > 0 ? Infinity : -Infinity;
+    if (typeof av === 'string') return dir * av.localeCompare(bv);
+    return dir * (av - bv);
+  });
+}
+
+/* ───────── COVER URL ───────── */
+const coverCache = {}; // isbn → confirmed URL from Google Books API
+
+// Publisher brand colors for placeholder fallback
+function pubColor(isbn) {
+  const pub = (books.find(b => b.isbn13 === isbn) || {}).publisher || '';
+  if (pub.includes('No Starch')) return '#1a1d2e';
+  if (pub.includes('O\'Reilly')) return '#d44000';
+  if (pub.includes('Wiley'))    return '#003087';
+  if (pub.includes('Packt'))    return '#7b2d8b';
+  if (pub.includes('CRC') || pub.includes('Routledge')) return '#b30000';
+  if (pub.includes('IT Revolution')) return '#1e6e3c';
+  if (pub.includes('Bloomsbury')) return '#6b21a8';
+  if (pub.includes('Elsevier') || pub.includes('Syngress')) return '#e55a00';
+  return '#374151';
+}
+
+function showPlaceholder(el, isbn) {
+  const b = books.find(x => x.isbn13 === isbn) || {};
+  const color = pubColor(isbn);
+  const short = b.title ? b.title.replace(/[,:].*/,'').trim() : '📖';
+  el.parentElement.innerHTML = `<div class="cover-placeholder" style="background:${color};color:#fff;font-size:10px;font-weight:600;padding:5px;text-align:center;line-height:1.3;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:3px"><div style="font-size:18px">📖</div><div>${short}</div></div>`;
+}
+
+// Detect Google Books 1×1 "no cover" ghost image
+function checkGoogleCover(img, isbn, nextAttempt) {
+  img.onload = function() {
+    if (img.naturalWidth <= 2) coverFallback(img, isbn, nextAttempt);
+    img.onload = null;
+  };
+}
+
+function coverUrl(isbn) {
+  return coverCache[isbn] || `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
+}
+
+function coverFallback(el, isbn, attempt) {
+  attempt = attempt || 1;
+  if (attempt === 1) {
+    // Try Google Books direct thumbnail
+    const src = `https://books.google.com/books/content?vid=ISBN${isbn}&printsec=frontcover&img=1&zoom=2&source=gbs_api`;
+    el.onerror = () => coverFallback(el, isbn, 2);
+    checkGoogleCover(el, isbn, 2);
+    el.src = src;
+    return;
+  }
+  if (attempt === 2) {
+    // Try Open Library large
+    el.onerror = () => coverFallback(el, isbn, 3);
+    el.onload = null;
+    el.src = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+    return;
+  }
+  // Final: styled publisher placeholder
+  el.onerror = null; el.onload = null;
+  showPlaceholder(el, isbn);
+}
+
+async function prefetchCovers() {
+  // Parallel fetch Google Books API in chunks of 6
+  const chunks = [];
+  for (let i = 0; i < books.length; i += 6) chunks.push(books.slice(i, i + 6));
+  for (const chunk of chunks) {
+    await Promise.all(chunk.map(async b => {
+      try {
+        const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${b.isbn13}&fields=items(volumeInfo(imageLinks))&maxResults=1`);
+        const d = await r.json();
+        const links = d?.items?.[0]?.volumeInfo?.imageLinks;
+        if (links) {
+          const url = (links.medium || links.thumbnail || links.smallThumbnail || '')
+            .replace('http:', 'https:').replace('zoom=1', 'zoom=2');
+          if (url) {
+            coverCache[b.isbn13] = url;
+            // Update any img already in the DOM showing a failed/placeholder state
+            document.querySelectorAll(`img[data-isbn="${b.isbn13}"]`).forEach(img => {
+              if (!img.complete || img.naturalWidth <= 2) img.src = url;
+            });
+          }
+        }
+      } catch(e) {}
+    }));
+    await new Promise(res => setTimeout(res, 120)); // brief pause between chunks
+  }
+}
+
+/* ───────── SCORE COLOR ───────── */
+function scoreClass(s) {
+  if (s >= 85) return 'score-high';
+  if (s >= 70) return 'score-med';
+  return 'score-low';
+}
+
+/* ───────── DECISION BADGE ───────── */
+function decisionBadge(d) {
+  const map = {BUY:'badge-buy',WAIT:'badge-wait',OPTIONAL:'badge-optional',SKIP:'badge-skip'};
+  const labels = {BUY:'✅ Buy',WAIT:'⏳ Wait',OPTIONAL:'⚡ Optional',SKIP:'❌ Skip'};
+  return `<span class="decision-badge ${map[d]||'badge-optional'}">${labels[d]||d}</span>`;
+}
+
+/* ───────── RENDER BROWSER ───────── */
+function render() {
+  const filtered = getFiltered();
+  const sorted = getSorted(filtered, sortKey, sortDir);
+  document.getElementById('showing-count').textContent = sorted.length;
+
+  const tbody = document.getElementById('book-tbody');
+  const empty = document.getElementById('empty-state');
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = sorted.map(b => {
+    const isWished = wishlist.has(b.isbn13);
+    const isOwned = owned.has(b.isbn13);
+    const grStr = b.grRating ? `<div class="rating-row"><span class="rating-source">Goodreads</span><span class="stars">★</span><span class="rating-val">${b.grRating}</span>${b.grCount?`<span class="rating-count">(${b.grCount.toLocaleString()})</span>`:''}</div>` : '';
+    const amzStr = b.amzRating ? `<div class="rating-row"><span class="rating-source">Amazon</span><span class="stars">★</span><span class="rating-val">${b.amzRating}</span>${b.amzCount?`<span class="rating-count">(${b.amzCount.toLocaleString()})</span>`:''}</div>` : '';
+    const orTag = b.oreilly ? '<span class="oreilly-tag">O\'Reilly Sub</span>' : '';
+    return `<tr class="book-row">
+      <td class="rank-cell">
+        <div class="rank-num ${b.rank<=3?'top3':''}">${b.rank}</div>
+        ${b.readingOrder?`<div class="reading-order">Read #${b.readingOrder}</div>`:''}
+      </td>
+      <td class="cover-cell">
+        <div class="cover-wrap">
+          <img src="${coverUrl(b.isbn13)}" data-isbn="${b.isbn13}" alt="cover" onerror="coverFallback(this,'${b.isbn13}',1)" loading="lazy">
+        </div>
+      </td>
+      <td class="book-info">
+        <div class="book-title">${b.title}</div>
+        <div class="book-author">${b.author}</div>
+        <div class="book-meta">
+          <span class="meta-tag cluster-tag">${b.cluster}</span>
+          <span class="meta-tag">${b.publisher}</span>
+          <span class="meta-tag">${b.year}</span>
+          ${orTag}
+          ${isOwned?'<span class="meta-tag" style="background:#dcfce7;color:#16a34a">✓ Owned</span>':''}
+        </div>
+      </td>
+      <td style="display:none"></td>
+      <td class="score-cell">
+        <div class="score-tip">
+          <div class="score-circle ${scoreClass(b.score)}">${b.score}</div>
+          <div class="score-breakdown">/ 100</div>
+          <div class="score-tooltip">
+            <div class="score-tooltip-row"><span>Relevance</span><span class="val">${b.breakdown.relevance}/40</span></div>
+            <div class="score-tooltip-row"><span>Community</span><span class="val">${b.breakdown.community}/30</span></div>
+            <div class="score-tooltip-row"><span>Recency</span><span class="val">${b.breakdown.recency}/15</span></div>
+            <div class="score-tooltip-row"><span>Depth</span><span class="val">${b.breakdown.depth}/15</span></div>
+          </div>
+        </div>
+      </td>
+      <td class="rating-cell">
+        ${grStr}${amzStr}
+        ${(!grStr && !amzStr)?'<span style="font-size:12px;color:var(--muted)">New / Unrated</span>':''}
+      </td>
+      <td class="review-cell">
+        <div class="review-text">${b.review}</div>
+        <div class="review-sources">${b.sources.map(s=>`<span class="source-tag">${s}</span>`).join('')}</div>
+      </td>
+      <td class="decision-cell">
+        ${decisionBadge(b.decision)}
+        ${b.flag?`<span class="flag-warn">${b.flag}</span>`:''}
+        <div style="margin-top:6px;font-size:12px;color:var(--muted)">List: <b>$${b.listPrice.toFixed(2)}</b></div>
+      </td>
+      <td class="action-cell">
+        <button class="wishlist-btn ${isWished?'active':''}" onclick="toggleWishlist('${b.isbn13}')" title="${isWished?'Remove from wishlist':'Add to wishlist'}">${isWished?'❤️':'🤍'}</button>
+        <button class="own-btn ${isOwned?'active':''}" onclick="toggleOwned('${b.isbn13}')">${isOwned?'✓ Owned':'Own it?'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  renderCartBadge();
+}
+
+/* ───────── RENDER PRICE ───────── */
+function renderPrice() {
+  const onlyWishlist = document.getElementById('price-wishlist-only').checked;
+  let list = onlyWishlist ? books.filter(b => wishlist.has(b.isbn13)) : books;
+  list = getSorted(list, priceSortKey, priceSortDir);
+
+  const tbody = document.getElementById('price-tbody');
+  tbody.innerHTML = list.map(b => {
+    const storeVal = storePrices[b.isbn13] || '';
+    const storeNum = parseFloat(storeVal) || null;
+    const amazonEstimate = (b.listPrice * 0.65).toFixed(2); // ~35% off
+    const bnEstimate = (b.listPrice * 0.72).toFixed(2); // ~28% off
+
+    let verdict = '', verdictReason = '';
+    if (b.oreilly) {
+      verdict = `<div class="verdict-sub">📖 O'Reilly Sub</div>`;
+      verdictReason = 'Available free with O\'Reilly subscription ($19.99/mo). Buy online only if you want physical copy.';
+    } else if (storeNum !== null) {
+      const diff = storeNum - parseFloat(amazonEstimate);
+      if (diff <= 2) {
+        verdict = `<div class="verdict-buy-store">🏪 Buy at Store</div>`;
+        verdictReason = `Store ≈ Amazon price. Get it now.`;
+      } else if (diff <= 8) {
+        verdict = `<div class="verdict-buy-store">🏪 Store OK</div>`;
+        verdictReason = `$${diff.toFixed(0)} more than Amazon est. Reasonable for instant access.`;
+      } else {
+        verdict = `<div class="verdict-buy-online">🌐 Buy Online</div>`;
+        verdictReason = `Save ~$${diff.toFixed(0)} vs store. Order on Amazon/B&N.`;
+      }
+    } else {
+      verdict = `<div style="color:var(--muted);font-size:12px">Enter store price →</div>`;
+      verdictReason = `Amazon est. $${amazonEstimate} (list × 0.65)`;
+    }
+
+    const amzLink = `https://www.amazon.com/s?k=${b.isbn13}`;
+    const bnLink = `https://www.barnesandnoble.com/s/${b.isbn13}`;
+
+    const savingsBadge = storeNum ? '' : `<span class="savings-badge">Est. $${amazonEstimate}</span>`;
+
+    return `<tr class="price-row">
+      <td style="text-align:center;width:40px;font-weight:700;color:var(--muted)">${b.rank}</td>
+      <td>
+        <div class="price-title">${b.title}</div>
+        <div class="price-author">${b.author} · ${b.year}</div>
+        ${b.oreilly?'<span class="oreilly-tag">O\'Reilly Sub</span>':''}
+      </td>
+      <td style="text-align:center;width:60px">
+        <div class="score-circle ${scoreClass(b.score)}" style="width:44px;height:44px;font-size:17px">${b.score}</div>
+      </td>
+      <td class="list-price" style="width:80px">$${b.listPrice.toFixed(2)}</td>
+      <td style="width:110px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="color:var(--muted);font-size:12px">$</span>
+          <input class="store-input" type="number" step="0.01" min="0" placeholder="0.00"
+            value="${storeVal}" oninput="storePrices['${b.isbn13}']=this.value;renderPrice()">
+        </div>
+        ${storeNum !== null ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">vs Amazon est. $${amazonEstimate}</div>` : ''}
+      </td>
+      <td style="width:180px">
+        <div class="online-links">
+          <a href="${amzLink}" target="_blank" class="online-link">🛒 Amazon <small>est. $${amazonEstimate}</small></a>
+          <a href="${bnLink}" target="_blank" class="online-link">📚 Barnes & Noble <small>est. $${bnEstimate}</small></a>
+        </div>
+      </td>
+      <td class="verdict-cell">
+        ${verdict}
+        <div class="verdict-reason">${verdictReason}</div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ───────── WISHLIST / OWNED ───────── */
+function toggleWishlist(isbn) {
+  if (wishlist.has(isbn)) wishlist.delete(isbn);
+  else wishlist.add(isbn);
+  render();
+  renderCartBadge();
+  renderCartDrawer();
+}
+function toggleOwned(isbn) {
+  if (owned.has(isbn)) owned.delete(isbn);
+  else owned.add(isbn);
+  render();
+}
+
+/* ───────── CART ───────── */
+function renderCartBadge() {
+  const total = [...wishlist].reduce((s, isbn) => {
+    const b = books.find(x => x.isbn13 === isbn);
+    return s + (b ? b.listPrice : 0);
+  }, 0);
+  document.getElementById('cart-count').textContent = wishlist.size;
+  document.getElementById('cart-total').textContent = total.toFixed(0);
+}
+
+function renderCartDrawer() {
+  const items = document.getElementById('cart-items');
+  if (wishlist.size === 0) {
+    items.innerHTML = '<div class="cart-empty">No books in wishlist yet.<br>Click 🤍 to add books.</div>';
+    document.getElementById('cart-total-drawer').textContent = '0';
+    return;
+  }
+  let total = 0;
+  items.innerHTML = [...wishlist].map(isbn => {
+    const b = books.find(x => x.isbn13 === isbn);
+    if (!b) return '';
+    total += b.listPrice;
+    return `<div class="cart-item">
+      <div class="cart-item-cover">
+        <img src="${coverUrl(b.isbn13)}" data-isbn="${b.isbn13}" alt="cover" onerror="coverFallback(this,'${b.isbn13}',1)" style="width:100%;height:100%;object-fit:cover">
+      </div>
+      <div class="cart-item-info">
+        <div class="cart-item-title" title="${b.title}">${b.title}</div>
+        <div class="cart-item-meta">${b.author.split(',')[0]} · ${b.year} · ${decisionBadge(b.decision)}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end">
+        <span class="cart-item-price">$${b.listPrice.toFixed(2)}</span>
+        <button class="cart-remove" onclick="toggleWishlist('${b.isbn13}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('cart-total-drawer').textContent = total.toFixed(2);
+}
+
+function toggleCart() {
+  const drawer = document.getElementById('cart-drawer');
+  const overlay = document.getElementById('cart-overlay');
+  const open = drawer.classList.toggle('open');
+  overlay.classList.toggle('open', open);
+  if (open) renderCartDrawer();
+}
+
+/* ───────── TABS ───────── */
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('browser-controls').style.display = name === 'browser' ? '' : 'none';
+  document.getElementById('price-controls').style.display = name === 'price' ? '' : 'none';
+  if (name === 'price') renderPrice();
+}
+
+/* ───────── INIT ───────── */
+sortBy('rank');
+prefetchCovers(); // background-fetch Google Books covers; re-renders when done
+</script>
+</body>
+</html>
