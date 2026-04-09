@@ -1,0 +1,947 @@
+[
+  {
+    "slug": "absolute-security",
+    "name": "Absolute Security",
+    "booth": "S-2039",
+    "hall": "South Hall",
+    "redbook": "../vendors/absolute-security/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "action1",
+    "name": "Action1",
+    "booth": "0454",
+    "hall": "South Hall",
+    "redbook": "../vendors/action1/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "akamai",
+    "name": "Akamai",
+    "booth": "N-6245",
+    "hall": "North Hall",
+    "redbook": "../vendors/akamai/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "apiiro",
+    "name": "Apiiro",
+    "booth": "S-3316",
+    "hall": "South Hall",
+    "redbook": "../vendors/apiiro/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "appgate",
+    "name": "Appgate",
+    "booth": "S-343",
+    "hall": "South Hall",
+    "redbook": "../vendors/appgate/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "archer-rsa-security",
+    "name": "Archer (RSA Security)",
+    "booth": "N 6253",
+    "hall": "North Hall",
+    "redbook": "../vendors/archer-rsa-security/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "arctic-wolf",
+    "name": "Arctic Wolf",
+    "booth": "S-1143",
+    "hall": "South Hall",
+    "redbook": "../vendors/arctic-wolf/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "armis",
+    "name": "Armis",
+    "booth": "N-5658",
+    "hall": "North Hall",
+    "redbook": "../vendors/armis/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "bigid",
+    "name": "BigID",
+    "booth": "N-4427",
+    "hall": "North Hall",
+    "redbook": "../vendors/bigid/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "bitsight",
+    "name": "Bitsight",
+    "booth": "TBD",
+    "hall": "TBD",
+    "redbook": "../vendors/bitsight/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "calypsoai",
+    "name": "CalypsoAI",
+    "booth": "#6365",
+    "hall": "South Hall",
+    "redbook": "../vendors/calypsoai/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "carbon-black-broadcom",
+    "name": "Carbon Black (Broadcom)",
+    "booth": "N-5345",
+    "hall": "North Hall",
+    "redbook": "../vendors/carbon-black-broadcom/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "chainguard",
+    "name": "Chainguard",
+    "booth": "227",
+    "hall": "South Hall",
+    "redbook": "../vendors/chainguard/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "check-point",
+    "name": "Check Point",
+    "booth": "N-5879",
+    "hall": "North Hall",
+    "redbook": "../vendors/check-point/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "checkmarx",
+    "name": "Checkmarx",
+    "booth": "#942",
+    "hall": "South Hall",
+    "redbook": "../vendors/checkmarx/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "cisco",
+    "name": "Cisco",
+    "booth": "Booth 6044",
+    "hall": "North Hall",
+    "redbook": "../vendors/cisco/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "cisco-ironportseg",
+    "name": "Cisco (IronPort/SEG)",
+    "booth": "6044",
+    "hall": "North Hall",
+    "redbook": "../vendors/cisco-ironportseg/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "cisco-securex",
+    "name": "Cisco (SecureX)",
+    "booth": "Booth 6044",
+    "hall": "North Hall",
+    "redbook": "../vendors/cisco-securex/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "cloudflare",
+    "name": "Cloudflare",
+    "booth": "N-5778",
+    "hall": "North Hall",
+    "redbook": "../vendors/cloudflare/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "commvault",
+    "name": "Commvault",
+    "booth": "S-0634",
+    "hall": "South Hall",
+    "redbook": "../vendors/commvault/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "corelight",
+    "name": "Corelight",
+    "booth": "N-5683",
+    "hall": "North Hall",
+    "redbook": "../vendors/corelight/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "coveware",
+    "name": "Coveware",
+    "booth": "S-427",
+    "hall": "South Hall",
+    "redbook": "../vendors/coveware/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "crowdstrike",
+    "name": "CrowdStrike",
+    "booth": "N-5845",
+    "hall": "North Hall",
+    "redbook": "../vendors/crowdstrike/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "crowdstrike-charlotte-ai",
+    "name": "CrowdStrike (Charlotte AI)",
+    "booth": "N-5845",
+    "hall": "North Hall",
+    "redbook": "../vendors/crowdstrike-charlotte-ai/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "crowdstrike-falcon-complete",
+    "name": "CrowdStrike Falcon Complete",
+    "booth": "N-5845",
+    "hall": "North Hall",
+    "redbook": "../vendors/crowdstrike-falcon-complete/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "crowdstrike-services",
+    "name": "CrowdStrike Services",
+    "booth": "N-5845",
+    "hall": "North Hall",
+    "redbook": "../vendors/crowdstrike-services/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "cyberint-check-point",
+    "name": "Cyberint (Check Point)",
+    "booth": "N-5879",
+    "hall": "North Hall",
+    "redbook": "../vendors/cyberint-check-point/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "d3-security",
+    "name": "D3 Security",
+    "booth": "S-3121",
+    "hall": "South Hall",
+    "redbook": "../vendors/d3-security/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "darktrace",
+    "name": "Darktrace",
+    "booth": "S-2227",
+    "hall": "South Hall",
+    "redbook": "../vendors/darktrace/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "dragos",
+    "name": "Dragos",
+    "booth": "4234",
+    "hall": "North Hall",
+    "redbook": "../vendors/dragos/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "drata",
+    "name": "Drata",
+    "booth": "#934",
+    "hall": "South Hall",
+    "redbook": "../vendors/drata/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "duo-security-cisco",
+    "name": "Duo Security (Cisco)",
+    "booth": "6044",
+    "hall": "North Hall",
+    "redbook": "../vendors/duo-security-cisco/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "entrust",
+    "name": "Entrust",
+    "booth": "5369 N",
+    "hall": "North Hall",
+    "redbook": "../vendors/entrust/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "entrust-identity",
+    "name": "Entrust Identity",
+    "booth": "5369",
+    "hall": "North Hall",
+    "redbook": "../vendors/entrust-identity/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "ese-11",
+    "name": "ESE-11",
+    "booth": "Early Stage Expo Kiosk",
+    "hall": "South Hall",
+    "redbook": "../vendors/ese-11/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "eset",
+    "name": "ESET",
+    "booth": "N-5253",
+    "hall": "North Hall",
+    "redbook": "../vendors/eset/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "exabeam",
+    "name": "Exabeam",
+    "booth": "S-826",
+    "hall": "South Hall",
+    "redbook": "../vendors/exabeam/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "expel",
+    "name": "Expel",
+    "booth": "N-5261",
+    "hall": "North Hall",
+    "redbook": "../vendors/expel/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "flashpoint",
+    "name": "Flashpoint",
+    "booth": "S-3341",
+    "hall": "South Hall",
+    "redbook": "../vendors/flashpoint/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "fortinet",
+    "name": "Fortinet",
+    "booth": "N-5762",
+    "hall": "North Hall",
+    "redbook": "../vendors/fortinet/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "fortra",
+    "name": "Fortra",
+    "booth": "S-1043",
+    "hall": "South Hall",
+    "redbook": "../vendors/fortra/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "geordie-ai",
+    "name": "Geordie AI",
+    "booth": "Kiosk 12",
+    "hall": "South Hall",
+    "redbook": "../vendors/geordie-ai/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "globalsign-by-gmo",
+    "name": "GlobalSign by GMO",
+    "booth": "N-5181",
+    "hall": "North Hall",
+    "redbook": "../vendors/globalsign-by-gmo/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "google-cloud-security",
+    "name": "Google Cloud Security",
+    "booth": "N-6062",
+    "hall": "North Hall",
+    "redbook": "../vendors/google-cloud-security/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "halcyon",
+    "name": "Halcyon",
+    "booth": "Booth 4315",
+    "hall": "South Hall",
+    "redbook": "../vendors/halcyon/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "hiddenlayer",
+    "name": "HiddenLayer",
+    "booth": "1400",
+    "hall": "South Expo",
+    "redbook": "../vendors/hiddenlayer/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "hoxhunt",
+    "name": "Hoxhunt",
+    "booth": "N-6187",
+    "hall": "North Hall",
+    "redbook": "../vendors/hoxhunt/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "hyperproof",
+    "name": "Hyperproof",
+    "booth": "S-1655",
+    "hall": "South Hall",
+    "redbook": "../vendors/hyperproof/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "ibm-security",
+    "name": "IBM Security",
+    "booth": "N-5770",
+    "hall": "North Hall",
+    "redbook": "../vendors/ibm-security/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "ibm-security-qradar",
+    "name": "IBM Security (QRadar)",
+    "booth": "N-5770",
+    "hall": "North Hall",
+    "redbook": "../vendors/ibm-security-qradar/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "iboss",
+    "name": "Iboss",
+    "booth": "6359",
+    "hall": "North Hall",
+    "redbook": "../vendors/iboss/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "illumio",
+    "name": "Illumio",
+    "booth": "N-5670",
+    "hall": "North Hall",
+    "redbook": "../vendors/illumio/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "immersive-labs",
+    "name": "Immersive Labs",
+    "booth": "S-3239",
+    "hall": "South Hall",
+    "redbook": "../vendors/immersive-labs/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "imperva",
+    "name": "Imperva",
+    "booth": "N-6265",
+    "hall": "North Hall",
+    "redbook": "../vendors/imperva/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "jfrog",
+    "name": "JFrog",
+    "booth": "S-748",
+    "hall": "South Hall",
+    "redbook": "../vendors/jfrog/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "knowbe4",
+    "name": "KnowBe4",
+    "booth": "1343",
+    "hall": "TBD",
+    "redbook": "../vendors/knowbe4/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "kroll",
+    "name": "Kroll",
+    "booth": "N-5845",
+    "hall": "North Hall",
+    "redbook": "../vendors/kroll/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "lacework",
+    "name": "Lacework",
+    "booth": "N5762",
+    "hall": "North Hall",
+    "redbook": "../vendors/lacework/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "lakera",
+    "name": "Lakera",
+    "booth": "N-5879",
+    "hall": "North Hall",
+    "redbook": "../vendors/lakera/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "logrhythm-now-exabeam",
+    "name": "LogRhythm (now Exabeam)",
+    "booth": "S-826",
+    "hall": "South Hall",
+    "redbook": "../vendors/logrhythm-now-exabeam/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "manageengine",
+    "name": "ManageEngine",
+    "booth": "S-626",
+    "hall": "South Hall",
+    "redbook": "../vendors/manageengine/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "mandiant-google",
+    "name": "Mandiant (Google)",
+    "booth": "N-6062",
+    "hall": "North Hall",
+    "redbook": "../vendors/mandiant-google/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "microsoft-entra-hello",
+    "name": "Microsoft Entra (Hello)",
+    "booth": "N-5744",
+    "hall": "North Hall",
+    "redbook": "../vendors/microsoft-entra-hello/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "microsoft-security",
+    "name": "Microsoft Security",
+    "booth": "N-5744",
+    "hall": "North Hall",
+    "redbook": "../vendors/microsoft-security/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "microsoft-sentinel",
+    "name": "Microsoft Sentinel",
+    "booth": "N-5744",
+    "hall": "North Hall",
+    "redbook": "../vendors/microsoft-sentinel/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "mimecast",
+    "name": "Mimecast",
+    "booth": "N-5245",
+    "hall": "North Hall",
+    "redbook": "../vendors/mimecast/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "netskope",
+    "name": "Netskope",
+    "booth": "1127",
+    "hall": "Moscone South",
+    "redbook": "../vendors/netskope/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "nok-nok-labs",
+    "name": "Nok Nok Labs",
+    "booth": "N-6578",
+    "hall": "North Hall",
+    "redbook": "../vendors/nok-nok-labs/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "opentext",
+    "name": "OpenText",
+    "booth": "N-4535",
+    "hall": "North Hall",
+    "redbook": "../vendors/opentext/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "opentext-encase",
+    "name": "OpenText (EnCase)",
+    "booth": "N-4535",
+    "hall": "North Hall",
+    "redbook": "../vendors/opentext-encase/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "optiv",
+    "name": "Optiv",
+    "booth": "S-1135",
+    "hall": "South Hall",
+    "redbook": "../vendors/optiv/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "orca-security",
+    "name": "Orca Security",
+    "booth": "1035",
+    "hall": "South Hall",
+    "redbook": "../vendors/orca-security/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "proofpoint",
+    "name": "Proofpoint",
+    "booth": "N-6163",
+    "hall": "North Hall",
+    "redbook": "../vendors/proofpoint/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "proofpoint-security-awareness",
+    "name": "Proofpoint Security Awareness",
+    "booth": "N-6163",
+    "hall": "North Hall",
+    "redbook": "../vendors/proofpoint-security-awareness/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "rapid7",
+    "name": "Rapid7",
+    "booth": "3102",
+    "hall": "Not Found",
+    "redbook": "../vendors/rapid7/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "recorded-future",
+    "name": "Recorded Future",
+    "booth": "N-6090",
+    "hall": "North Hall",
+    "redbook": "../vendors/recorded-future/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "robust-intelligence-cisco",
+    "name": "Robust Intelligence (Cisco)",
+    "booth": "6044",
+    "hall": "North Hall",
+    "redbook": "../vendors/robust-intelligence-cisco/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "rubrik",
+    "name": "Rubrik",
+    "booth": "S-926",
+    "hall": "South Hall",
+    "redbook": "../vendors/rubrik/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "sailpoint",
+    "name": "SailPoint",
+    "booth": "N-4335",
+    "hall": "North Hall",
+    "redbook": "../vendors/sailpoint/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "sans-institute",
+    "name": "SANS Institute",
+    "booth": "S-3440",
+    "hall": "South Hall",
+    "redbook": "../vendors/sans-institute/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "saviynt",
+    "name": "Saviynt",
+    "booth": "N-4329",
+    "hall": "North Hall",
+    "redbook": "../vendors/saviynt/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "securonix",
+    "name": "Securonix",
+    "booth": "2133",
+    "hall": "South Hall",
+    "redbook": "../vendors/securonix/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "semgrep",
+    "name": "Semgrep",
+    "booth": "1743",
+    "hall": "South Hall",
+    "redbook": "../vendors/semgrep/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "sentinelone",
+    "name": "SentinelOne",
+    "booth": "N-5863",
+    "hall": "North Hall",
+    "redbook": "../vendors/sentinelone/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "sentinelone-purple-ai",
+    "name": "SentinelOne (Purple AI)",
+    "booth": "N-5863",
+    "hall": "North Hall",
+    "redbook": "../vendors/sentinelone-purple-ai/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "servicenow",
+    "name": "ServiceNow",
+    "booth": "3428",
+    "hall": "South Hall",
+    "redbook": "../vendors/servicenow/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "snyk",
+    "name": "Snyk",
+    "booth": "S-1227",
+    "hall": "South Hall",
+    "redbook": "../vendors/snyk/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "sophos",
+    "name": "Sophos",
+    "booth": "6477",
+    "hall": "TBD",
+    "redbook": "../vendors/sophos/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "splunk-cisco",
+    "name": "Splunk (Cisco)",
+    "booth": "N-6144",
+    "hall": "North Hall",
+    "redbook": "../vendors/splunk-cisco/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "splunk-soar-phantom",
+    "name": "Splunk SOAR (Phantom)",
+    "booth": "N-6144",
+    "hall": "North Hall",
+    "redbook": "../vendors/splunk-soar-phantom/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "stellar-cyber",
+    "name": "Stellar Cyber",
+    "booth": "327",
+    "hall": "South Hall",
+    "redbook": "../vendors/stellar-cyber/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "swimlane",
+    "name": "Swimlane",
+    "booth": "S-1957",
+    "hall": "South Hall",
+    "redbook": "../vendors/swimlane/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "teleport",
+    "name": "Teleport",
+    "booth": "S-3111",
+    "hall": "South Hall",
+    "redbook": "../vendors/teleport/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "tenable",
+    "name": "Tenable",
+    "booth": "6155",
+    "hall": "North Hall",
+    "redbook": "../vendors/tenable/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "tenable-ot-formerly-indegy",
+    "name": "Tenable OT (formerly Indegy)",
+    "booth": "6155",
+    "hall": "North Hall",
+    "redbook": "../vendors/tenable-ot-formerly-indegy/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "tessian",
+    "name": "Tessian",
+    "booth": "N-6163",
+    "hall": "North Hall",
+    "redbook": "../vendors/tessian/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "thales",
+    "name": "Thales",
+    "booth": "N-6265",
+    "hall": "North Hall",
+    "redbook": "../vendors/thales/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "threatconnect",
+    "name": "ThreatConnect",
+    "booth": "4419",
+    "hall": "North Hall",
+    "redbook": "../vendors/threatconnect/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "torq",
+    "name": "Torq",
+    "booth": "527",
+    "hall": "Not Found",
+    "redbook": "../vendors/torq/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "vanta",
+    "name": "Vanta",
+    "booth": "S-1827",
+    "hall": "South Hall",
+    "redbook": "../vendors/vanta/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "varonis",
+    "name": "Varonis",
+    "booth": "5457",
+    "hall": "North Hall",
+    "redbook": "../vendors/varonis/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "veeam",
+    "name": "Veeam",
+    "booth": "S-0427",
+    "hall": "South Hall",
+    "redbook": "../vendors/veeam/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "veracode",
+    "name": "Veracode",
+    "booth": "435",
+    "hall": "Not Found",
+    "redbook": "../vendors/veracode/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "wiz",
+    "name": "Wiz",
+    "booth": "N-6062",
+    "hall": "North Hall",
+    "redbook": "../vendors/wiz/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  },
+  {
+    "slug": "zscaler",
+    "name": "Zscaler",
+    "booth": "N-5269",
+    "hall": "North Hall",
+    "redbook": "../vendors/zscaler/redbook.md",
+    "x_pct": null,
+    "y_pct": null
+  }
+]
